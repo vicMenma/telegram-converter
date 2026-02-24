@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    container_name: video_studio_bot
+    restart: unless-stopped
+
+    # Load secrets from the .env file
+    env_file:
+      - ./bot/.env
+
+    # Persist temp files across container restarts (optional)
+    volumes:
+      - /tmp/tgvideobot:/tmp/tgvideobot
+
+    # Never needs to expose a port — bot uses outbound long-polling only
