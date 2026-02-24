@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["ffmpeg"]
+```
+
+**6. Add a Procfile**
+Create `bot/Procfile` with this content:
+```
+worker: python main.py
