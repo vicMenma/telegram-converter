@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>Video Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root{
+      --bg:      #0d0d14;
+      --card:    #16161f;
+      --border:  rgba(255,255,255,0.06);
+      --accent:  #6c63ff;
+      --green:   #22d3a0;
+      --red:     #ff5b5b;
+      --amber:   #ffb547;
+      --text:    #e6e6f0;
+      --muted:   #64647a;
+      --r:       14px;
+      --rsm:     10px;
+    }
+
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;overflow-x:hidden;-webkit-tap-highlight-color:transparent}
+
+    /* ── ambient ── */
+    .glow{position:fixed;pointer-events:none;border-radius:50%;filter:blur(100px);opacity:.12;z-index:0}
+    .glow-a{width:500px;height:500px;background:#6c63ff;top:-180px;left:-160px;animation:pulse 8s ease-in-out infinite}
+    .glow-b{width:350px;height:350px;background:#22d3a0;bottom:-100px;right:-120px;animation:pulse 10s ease-in-out infinite reverse}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+
+    /* ── layout ── */
+    .app{min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1}
+
+    header{padding:22px 20px 0;display:flex;align-items:center;gap:12px}
+    .logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#6c63ff,#22d3a0);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+    .logo-text h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
+    .logo-text p{font-size:12px;color:var(--muted);margin-top:1px}
+
+    main{flex:1;padding:20px;display:flex;flex-direction:column;gap:14px}
+
+    /* ── mode tabs ── */
+    .modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .mode-btn{background:var(--card);border:2px solid var(--border);border-radius:var(--r);padding:16px 12px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+    .mode-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(108,99,255,.08),rgba(34,211,160,.08));opacity:0;transition:opacity .2s}
+    .mode-btn.active{border-color:var(--accent)}
+    .mode-btn.active::before{opacity:1}
+    .mode-btn:hover:not(.active){border-color:rgba(108,99,255,.35)}
+    .mode-icon{font-size:28px;margin-bottom:7px}
+    .mode-label{font-size:13px;font-weight:600;display:block}
+    .mode-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
+
+    /* ── cards ── */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+    .card-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+
+    /* ── drop zone ── */
+    .dropzone{border:2px dashed var(--border);border-radius:var(--r);padding:36px 20px;text-align:center;cursor:pointer;transition:all .25s;background:var(--card)}
+    .dropzone:hover,.dropzone.over{border-color:var(--accent);background:rgba(108,99,255,.05)}
+    .drop-icon{font-size:42px;margin-bottom:10px;animation:float 3s ease-in-out infinite}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+    .drop-title{font-size:15px;font-weight:600}
+    .drop-sub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
+    input[type=file]{display:none}
+
+    /* ── file pill ── */
+    .file-pill{display:none;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:13px 14px}
+    .file-pill.show{display:flex}
+    .pill-icon{width:40px;height:40px;border-radius:10px;background:rgba(108,99,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .pill-meta{flex:1;min-width:0}
+    .pill-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pill-size{font-size:11px;color:var(--muted);margin-top:2px}
+    .pill-rm{width:30px;height:30px;background:rgba(255,91,91,.1);border:none;border-radius:8px;color:var(--red);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;flex-shrink:0}
+    .pill-rm:hover{background:rgba(255,91,91,.22)}
+
+    /* ── subtitle slot ── */
+    .sub-slot{display:none}
+    .sub-slot.show{display:block}
+
+    /* ── resolution grid ── */
+    .res-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .res-btn{background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rsm);padding:12px 6px;text-align:center;cursor:pointer;transition:all .2s;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;color:var(--muted)}
+    .res-btn:hover:not(.active){border-color:rgba(108,99,255,.4);color:var(--text)}
+    .res-btn.active{background:rgba(108,99,255,.14);border-color:var(--accent);color:var(--accent)}
+    .res-name{display:block;font-size:14px;font-weight:700;color:inherit}
+    .res-dims{display:block;font-size:9px;margin-top:2px;opacity:.7}
+
+    /* ── action button ── */
+    .action-btn{width:100%;padding:15px;background:linear-gradient(135deg,#6c63ff,#8b84ff);border:none;border-radius:var(--r);color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.02em}
+    .action-btn:disabled{opacity:.35;cursor:not-allowed}
+    .action-btn:not(:disabled):hover{filter:brightness(1.1)}
+    .action-btn:not(:disabled):active{transform:scale(.98)}
+
+    /* ── progress ── */
+    .progress-wrap{display:none;flex-direction:column;gap:8px}
+    .progress-wrap.show{display:flex}
+    .progress-row{display:flex;justify-content:space-between;font-size:13px}
+    .prog-bar-bg{height:5px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden}
+    .prog-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;width:0;transition:width .4s ease}
+
+    /* ── result ── */
+    .result{display:none;flex-direction:column;align-items:center;gap:10px;background:rgba(34,211,160,.07);border:1px solid rgba(34,211,160,.25);border-radius:var(--r);padding:20px}
+    .result.show{display:flex}
+    .result-icon{font-size:38px}
+    .result h3{color:var(--green);font-size:15px;font-weight:700}
+    .result p{font-size:12px;color:var(--muted);text-align:center}
+    .dl-btn{padding:11px 26px;background:var(--green);border:none;border-radius:var(--rsm);color:#0d0d14;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:opacity .2s}
+    .dl-btn:hover{opacity:.85}
+    .reset-btn{background:transparent;border:1px solid var(--border);border-radius:var(--rsm);padding:9px 20px;color:var(--muted);font-family:inherit;font-size:12px;cursor:pointer;transition:all .2s}
+    .reset-btn:hover{border-color:var(--accent);color:var(--text)}
+
+    /* ── error ── */
+    .error-box{display:none;background:rgba(255,91,91,.07);border:1px solid rgba(255,91,91,.25);border-radius:var(--r);padding:14px;font-size:13px;color:var(--red)}
+    .error-box.show{display:block}
+    .error-box strong{display:block;margin-bottom:4px}
+
+    /* ── info note ── */
+    .note{font-size:11px;color:var(--muted);line-height:1.6;padding:10px 14px;background:rgba(255,255,255,.03);border-radius:var(--rsm);border-left:3px solid var(--accent)}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <header>
+    <div class="logo">🎬</div>
+    <div class="logo-text">
+      <h1>Video Studio</h1>
+      <p>Subtitle burn · Resolution convert</p>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Mode selector -->
+    <div class="modes">
+      <div class="mode-btn active" data-mode="subtitles" onclick="setMode('subtitles')">
+        <div class="mode-icon">🔤</div>
+        <span class="mode-label">Burn Subtitles</span>
+        <div class="mode-desc">Hardcode .srt / .ass / .vtt into video</div>
+      </div>
+      <div class="mode-btn" data-mode="resolution" onclick="setMode('resolution')">
+        <div class="mode-icon">📐</div>
+        <span class="mode-label">Change Resolution</span>
+        <div class="mode-desc">360p · 480p · 720p · 1080p · 4K</div>
+      </div>
+    </div>
+
+    <!-- Video upload -->
+    <div>
+      <div class="card-title">Video File</div>
+      <div class="dropzone" id="video-drop" onclick="document.getElementById('video-input').click()">
+        <div class="drop-icon">🎞️</div>
+        <div class="drop-title">Drop your video here</div>
+        <div class="drop-sub">MP4 · MKV · AVI · MOV · WEBM<br>Max 50 MB</div>
+      </div>
+      <input type="file" id="video-input" accept="video/*,.mkv,.avi,.ts,.flv,.m4v" onchange="pickVideo(this)"/>
+      <div class="file-pill" id="video-pill">
+        <div class="pill-icon">🎬</div>
+        <div class="pill-meta">
+          <div class="pill-name" id="video-name">video.mp4</div>
+          <div class="pill-size" id="video-size">0 MB</div>
+        </div>
+        <button class="pill-rm" onclick="clearVideo()">✕</button>
+      </div>
+    </div>
+
+    <!-- Subtitle upload (mode=subtitles) -->
+    <div class="sub-slot show" id="sub-section">
+      <div class="card-title">Subtitle File</div>
+      <div class="dropzone" id="sub-drop" onclick="document.getElementById('sub-input').click()">
+        <div class="drop-icon">📝</div>
+        <div class="drop-title">Drop your subtitle here</div>
+        <div class="drop-sub">SRT · ASS · SSA · VTT · SUB</div>
+      </div>
+      <input type="file" id="sub-input" accept=".srt,.ass,.ssa,.vtt,.sub" onchange="pickSub(this)"/>
+      <div class="file-pill" id="sub-pill">
+        <div class="pill-icon">📝</div>
+        <div class="pill-meta">
+          <div class="pill-name" id="sub-name">subtitles.srt</div>
+          <div class="pill-size" id="sub-size">0 KB</div>
+        </div>
+        <button class="pill-rm" onclick="clearSub()">✕</button>
+      </div>
+      <div class="note" style="margin-top:10px">
+        💡 <b>.ASS</b> files preserve custom fonts, colours & positioning.<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<b>.SRT</b> files use a clean white default style.
+      </div>
+    </div>
+
+    <!-- Resolution picker (mode=resolution) -->
+    <div class="sub-slot" id="res-section">
+      <div class="card-title">Target Resolution</div>
+      <div class="res-grid" id="res-grid">
+        <div class="res-btn" data-res="360p"  onclick="pickRes('360p')"><span class="res-name">360p</span><span class="res-dims">640×360</span></div>
+        <div class="res-btn" data-res="480p"  onclick="pickRes('480p')"><span class="res-name">480p</span><span class="res-dims">854×480</span></div>
+        <div class="res-btn" data-res="720p"  onclick="pickRes('720p')"><span class="res-name">720p</span><span class="res-dims">1280×720</span></div>
+        <div class="res-btn" data-res="1080p" onclick="pickRes('1080p')"><span class="res-name">1080p</span><span class="res-dims">1920×1080</span></div>
+        <div class="res-btn" data-res="1440p" onclick="pickRes('1440p')"><span class="res-name">1440p</span><span class="res-dims">2560×1440</span></div>
+        <div class="res-btn" data-res="4K"    onclick="pickRes('4K')"><span class="res-name">4K</span><span class="res-dims">3840×2160</span></div>
+      </div>
+      <div class="note" style="margin-top:10px">
+        💡 Aspect ratio is always preserved — black bars are added if needed.
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-row">
+        <span id="prog-label">Processing…</span>
+        <span id="prog-pct">0%</span>
+      </div>
+      <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar"></div></div>
+    </div>
+
+    <!-- Error -->
+    <div class="error-box" id="error-box">
+      <strong>❌ Something went wrong</strong>
+      <span id="error-msg"></span>
+    </div>
+
+    <!-- Result -->
+    <div class="result" id="result-box">
+      <div class="result-icon">✅</div>
+      <h3 id="result-title">Done!</h3>
+      <p id="result-desc">Your file is ready.</p>
+      <a id="dl-link" style="text-decoration:none">
+        <button class="dl-btn">⬇ Download</button>
+      </a>
+      <button class="reset-btn" onclick="resetAll()">Process another file</button>
+    </div>
+
+    <!-- Action button -->
+    <button class="action-btn" id="action-btn" disabled onclick="startProcessing()">
+      Select files to continue
+    </button>
+
+  </main>
+</div>
+
+<script>
+// ── Telegram WebApp ──────────────────────────────────────────────
+const tg = window.Telegram?.WebApp;
+if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor('#0d0d14'); tg.setBackgroundColor('#0d0d14'); }
+
+// ── State ────────────────────────────────────────────────────────
+const S = { mode: 'subtitles', videoFile: null, subFile: null, resolution: null };
+
+// ── Mode switching ───────────────────────────────────────────────
+function setMode(m) {
+  S.mode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  document.getElementById('sub-section').classList.toggle('show', m === 'subtitles');
+  document.getElementById('res-section').classList.toggle('show', m === 'resolution');
+  S.subFile = null; S.resolution = null;
+  document.getElementById('sub-pill').classList.remove('show');
+  document.getElementById('sub-drop').style.display = '';
+  document.querySelectorAll('.res-btn').forEach(b => b.classList.remove('active'));
+  updateBtn();
+}
+
+// ── Video pick ───────────────────────────────────────────────────
+function pickVideo(input) {
+  const f = input.files[0]; if (!f) return;
+  if (f.size > 50 * 1024 * 1024) { showError('File too large', 'Maximum video size is 50 MB.'); return; }
+  S.videoFile = f;
+  document.getElementById('video-name').textContent = f.name;
+  document.getElementById('video-size').textContent = fmtSize(f.size);
+  document.getElementById('video-drop').style.display = 'none';
+  document.getElementById('video-pill').classList.add('show');
+  hideStatus(); updateBtn();
+}
+function clearVideo() {
+  S.videoFile = null;
+  document.getElementById('video-input').value = '';
+  document.getElementById('video-pill').classList.remove('show');
+  document.getElementById('video-drop').style.display = '';
+  hideStatus(); updateBtn();
+}
+
+// ── Subtitle pick ─────────────────────────────────────────────────
+function pickSub(input) {
+  const f = input.files[0]; if (!f) return;
+  S.subFile = f;
+  document.getElementById('sub-name').textContent = f.name;
+  document.getElementById('sub-size').textContent  = fmtSize(f.size);
+  document.getElementById('sub-drop').style.display = 'none';
+  document.getElementById('sub-pill').classList.add('show');
+  hideStatus(); updateBtn();
+}
+function clearSub() {
+  S.subFile = null;
+  document.getElementById('sub-input').value = '';
+  document.getElementById('sub-pill').classList.remove('show');
+  document.getElementById('sub-drop').style.display = '';
+  updateBtn();
+}
+
+// ── Resolution pick ───────────────────────────────────────────────
+function pickRes(r) {
+  S.resolution = r;
+  document.querySelectorAll('.res-btn').forEach(b => b.classList.toggle('active', b.dataset.res === r));
+  updateBtn();
+}
+
+// ── Button state ──────────────────────────────────────────────────
+function updateBtn() {
+  const btn = document.getElementById('action-btn');
+  const ready = S.mode === 'subtitles'
+    ? (S.videoFile && S.subFile)
+    : (S.videoFile && S.resolution);
+  btn.disabled = !ready;
+  if (!S.videoFile) {
+    btn.textContent = 'Upload a video first';
+  } else if (S.mode === 'subtitles' && !S.subFile) {
+    btn.textContent = 'Upload a subtitle file';
+  } else if (S.mode === 'resolution' && !S.resolution) {
+    btn.textContent = 'Pick a resolution';
+  } else if (S.mode === 'subtitles') {
+    btn.textContent = '🔤 Burn Subtitles';
+  } else {
+    btn.textContent = `📐 Convert to ${S.resolution}`;
+  }
+}
+
+// ── Processing ────────────────────────────────────────────────────
+async function startProcessing() {
+  hideStatus();
+  document.getElementById('action-btn').style.display = 'none';
+
+  try {
+    await simulateAndUpload();
+  } catch (err) {
+    showError('Processing failed', err.message);
+    document.getElementById('action-btn').style.display = 'block';
+  }
+}
+
+async function simulateAndUpload() {
+  const steps = S.mode === 'subtitles'
+    ? [ {t:'Uploading video…', v:25}, {t:'Uploading subtitles…', v:45},
+        {t:'Burning subtitles with FFmpeg…', v:85}, {t:'Finalising…', v:100} ]
+    : [ {t:'Uploading video…', v:30},
+        {t:`Re-encoding to ${S.resolution}…`, v:85}, {t:'Finalising…', v:100} ];
+
+  for (const s of steps) {
+    document.getElementById('prog-label').textContent = s.t;
+    document.getElementById('progress-wrap').classList.add('show');
+    await animateTo(s.v, 700);
+  }
+
+  // ── Real API call (uncomment & configure for production) ────────
+  // const fd = new FormData();
+  // fd.append('video', S.videoFile);
+  // fd.append('mode',  S.mode);
+  // if (S.mode === 'subtitles')  fd.append('subtitle', S.subFile);
+  // if (S.mode === 'resolution') fd.append('resolution', S.resolution);
+  // const r = await fetch('/api/process', { method:'POST', body:fd });
+  // if (!r.ok) throw new Error(`Server error ${r.status}`);
+  // const data = await r.json();
+  // showResult(data.filename, data.download_url);
+
+  // Demo result (remove in production)
+  const outName = S.mode === 'subtitles'
+    ? S.videoFile.name.replace(/\.[^.]+$/, '') + '_subtitled.mp4'
+    : S.videoFile.name.replace(/\.[^.]+$/, '') + `_${S.resolution}.mp4`;
+  showResult(outName, '#');
+}
+
+// ── Progress animation ────────────────────────────────────────────
+function animateTo(target, ms) {
+  return new Promise(res => {
+    const bar  = document.getElementById('prog-bar');
+    const pct  = document.getElementById('prog-pct');
+    const from = parseFloat(bar.style.width) || 0;
+    const t0   = performance.now();
+    function tick(now) {
+      const p = Math.min((now - t0) / ms, 1);
+      const v = from + (target - from) * p;
+      bar.style.width = v + '%';
+      pct.textContent = Math.round(v) + '%';
+      if (p < 1) requestAnimationFrame(tick); else res();
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// ── Status helpers ────────────────────────────────────────────────
+function showResult(filename, url) {
+  document.getElementById('progress-wrap').classList.remove('show');
+  const label = S.mode === 'subtitles' ? 'Subtitles burned!' : `Converted to ${S.resolution}!`;
+  document.getElementById('result-title').textContent = label;
+  document.getElementById('result-desc').textContent  = filename + ' is ready.';
+  document.getElementById('dl-link').href = url;
+  document.getElementById('result-box').classList.add('show');
+}
+function showError(title, msg) {
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('error-box').classList.add('show');
+  document.getElementById('error-msg').textContent = msg;
+}
+function hideStatus() {
+  document.getElementById('progress-wrap').classList.remove('show');
+  document.getElementById('error-box').classList.remove('show');
+  document.getElementById('result-box').classList.remove('show');
+  document.getElementById('prog-bar').style.width = '0%';
+  document.getElementById('prog-pct').textContent = '0%';
+}
+function resetAll() {
+  clearVideo(); clearSub(); S.resolution = null;
+  document.querySelectorAll('.res-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('action-btn').style.display = 'block';
+  hideStatus(); updateBtn();
+}
+
+// ── Drag and drop ─────────────────────────────────────────────────
+['video-drop','sub-drop'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover',  e => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('over');
+    const f = e.dataTransfer.files[0]; if (!f) return;
+    if (id === 'video-drop') { const inp = document.getElementById('video-input'); const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; pickVideo(inp); }
+    else                     { const inp = document.getElementById('sub-input');   const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; pickSub(inp); }
+  });
+});
+
+function fmtSize(b) {
+  if (b < 1024)        return b + ' B';
+  if (b < 1048576)     return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+updateBtn();
+</script>
+</body>
+</html>
