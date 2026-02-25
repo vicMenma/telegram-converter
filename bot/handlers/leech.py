@@ -201,7 +201,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     file_name = Path(file_path).name
     ext       = Path(file_path).suffix.lower()
 
-    VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".ts"}
+    VIDEO_EXTS = {".mp4", ".m4v"}  # only these render nicely as Telegram videos
 
     await progress_msg.edit(
         f"📤 **Uploading…**\n\n`░░░░░░░░░░░░░░░░░░░░` 0%\n"
@@ -241,17 +241,19 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
         except Exception:
             pass
 
-    caption = f"✅ **Done!**\n\n📁 `{file_name}`\n📦 {format_size(size)}"
+    caption = f"✅ Done"
 
     if ext in VIDEO_EXTS:
-        # Generate thumbnail
         thumb = await _make_thumb(file_path)
         duration = await _get_duration(file_path)
-        await client.send_video(
+        width, height = await _get_dimensions(file_path)
+        sent = await client.send_video(
             chat_id=msg.chat.id,
             video=file_path,
             thumb=thumb,
             duration=duration,
+            width=width   if width  else None,
+            height=height if height else None,
             caption=caption,
             file_name=file_name,
             supports_streaming=True,
@@ -260,7 +262,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
         if thumb and os.path.exists(thumb):
             os.remove(thumb)
     else:
-        await client.send_document(
+        sent = await client.send_document(
             chat_id=msg.chat.id,
             document=file_path,
             caption=caption,
@@ -269,6 +271,45 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
         )
 
     await progress_msg.delete()
+
+    # ── Ask to forward to channel ─────────────────────────────────
+    import os as _os
+    if _os.getenv("FORWARD_CHANNEL_ID", "").strip():
+        from handlers.workflow import FORWARD_PENDING, _forward_keyboard
+        FORWARD_PENDING[sent.id] = {
+            "chat_id":    sent.chat.id,
+            "message_id": sent.id,
+        }
+        await client.send_message(
+            chat_id=msg.chat.id,
+            text=(
+                "╔══════════════════════════════╗\n"
+                "    📢  **FORWARD TO CHANNEL**\n"
+                "╚══════════════════════════════╝\n\n"
+                "_Would you like to forward this file to your channel?_"
+            ),
+            reply_markup=_forward_keyboard(sent.id),
+        )
+
+
+async def _get_dimensions(video_path: str) -> tuple[int, int]:
+    """Get video width and height via ffprobe."""
+    import shutil, subprocess
+    ffprobe = shutil.which("ffprobe") or r"C:\ffmpeg\bin\ffprobe.exe"
+    try:
+        r = subprocess.run([
+            ffprobe, "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=width,height",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            video_path,
+        ], capture_output=True, text=True, timeout=10)
+        lines = [l.strip() for l in r.stdout.strip().splitlines() if l.strip()]
+        if len(lines) >= 2:
+            return int(lines[0]), int(lines[1])
+    except Exception:
+        pass
+    return 0, 0
 
 
 async def _make_thumb(video_path: str) -> str | None:

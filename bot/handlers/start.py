@@ -66,7 +66,7 @@ Drop any magnet link — bot handles the rest.
 ──────────────────────────────
 
 📁 Up to **2 GB** per file
-⚡ Powered by **FFmpeg + yt-dlp + aria2c**
+⚡ Powered by **FFmpeg** + **yt-dlp**
 🔒 Files auto-deleted after processing
 
 👇 _Send a video or paste any link to begin_"""

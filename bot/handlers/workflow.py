@@ -701,7 +701,7 @@ async def _send_output(client: Client, msg: Message, progress_msg,
     )
 
     # Always use bot client to send — user account doesn't have access to user chats
-    await client.send_video(
+    sent = await client.send_video(
         chat_id=msg.chat.id,
         video=output_path,
         thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
@@ -722,3 +722,73 @@ async def _send_output(client: Client, msg: Message, progress_msg,
             os.remove(thumb_path)
         except Exception:
             pass
+
+    # ── Ask to forward to channel ─────────────────────────────────
+    import os as _os
+    if _os.getenv("FORWARD_CHANNEL_ID", "").strip():
+        FORWARD_PENDING[sent.id] = {
+            "chat_id":    sent.chat.id,
+            "message_id": sent.id,
+        }
+        await client.send_message(
+            chat_id=msg.chat.id,
+            text=(
+                "╔══════════════════════════════╗\n"
+                "    📢  **FORWARD TO CHANNEL**\n"
+                "╚══════════════════════════════╝\n\n"
+                "_Would you like to forward this file to your channel?_"
+            ),
+            reply_markup=_forward_keyboard(sent.id),
+        )
+
+
+# ── Forward to channel ────────────────────────────────────────────
+# Stores pending forward: { msg_id: { "chat_id": ..., "message_id": ... } }
+FORWARD_PENDING: dict[int, dict] = {}
+
+
+def _forward_keyboard(sent_msg_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Yes, forward",  callback_data=f"fwd:yes:{sent_msg_id}"),
+            InlineKeyboardButton("✕  No thanks",     callback_data=f"fwd:no:{sent_msg_id}"),
+        ]
+    ])
+
+
+@app.on_callback_query(filters.regex(r"^fwd:"))
+async def forward_callback(client: Client, cb: CallbackQuery):
+    import os
+    parts  = cb.data.split(":")
+    action = parts[1]
+    key    = int(parts[2])
+
+    channel_id = os.getenv("FORWARD_CHANNEL_ID", "").strip()
+
+    pending = FORWARD_PENDING.pop(key, None)
+    if not pending:
+        await cb.answer("⚠️ Already handled or expired.", show_alert=True)
+        return
+
+    if action == "no":
+        await cb.message.edit("_Got it — not forwarded._")
+        await cb.answer()
+        return
+
+    if not channel_id:
+        await cb.answer("⚠️ No channel configured. Set FORWARD_CHANNEL_ID in env.", show_alert=True)
+        await cb.message.delete()
+        return
+
+    try:
+        # Copy without "Forwarded from" header
+        await client.copy_message(
+            chat_id=channel_id,
+            from_chat_id=pending["chat_id"],
+            message_id=pending["message_id"],
+        )
+        await cb.message.edit("✅ _Forwarded to channel._")
+        await cb.answer("✅ Forwarded!")
+    except Exception as e:
+        await cb.message.edit(f"❌ _Forward failed_\n\n`{str(e)[:200]}`")
+        await cb.answer("❌ Failed", show_alert=True)
