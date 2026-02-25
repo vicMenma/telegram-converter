@@ -186,9 +186,6 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
 
         asyncio.run_coroutine_threadsafe(_safe_edit(progress_msg, text), loop)
 
-    import shutil as _shutil
-    _aria2c = _shutil.which("aria2c")
-
     ydl_opts = {
         "format":              format_id,
         "outtmpl":             output_template,
@@ -205,18 +202,7 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
         }],
     }
 
-    # Use aria2c if available — much faster for large files
-    if _aria2c:
-        ydl_opts["external_downloader"] = "aria2c"
-        ydl_opts["external_downloader_args"] = [
-            "--max-connection-per-server=16",  # 16 connections per server
-            "--min-split-size=1M",             # split into 1MB chunks
-            "--split=16",                      # 16 parallel splits
-            "--max-concurrent-downloads=16",
-            "--file-allocation=none",          # faster start
-            "--auto-file-renaming=false",
-            "--quiet=true",
-        ]
+    # aria2c not available on Railway — using built-in parallel fragments
 
     def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
