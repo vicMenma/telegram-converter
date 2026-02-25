@@ -14,6 +14,7 @@ import logging
 import aiohttp
 import aiofiles
 from pathlib import Path
+from utils.file_utils import format_size
 from config import (
     TEMP_DIR,
     FFMPEG_VIDEO_CODEC, FFMPEG_AUDIO_CODEC,
@@ -279,7 +280,12 @@ async def change_resolution(video_path: str, scale: str, progress_cb=None) -> st
 
 # ── URL Downloader ─────────────────────────────────────────────────
 
-async def download_url(url: str, job_id: str) -> str:
+async def download_url(url: str, job_id: str, progress_msg=None) -> str:
+    """
+    Download a video from a URL with live progress updates.
+    progress_msg: a Pyrogram Message object to edit with progress.
+    """
+    import time as _time
     async with aiohttp.ClientSession() as session:
         async with session.get(
             url, allow_redirects=True,
@@ -291,21 +297,58 @@ async def download_url(url: str, job_id: str) -> str:
                     "Make sure the URL is a direct link to a video file."
                 )
             content_length = resp.headers.get("Content-Length")
-            if content_length and int(content_length) > MAX_DOWNLOAD_SIZE_BYTES:
+            total = int(content_length) if content_length else 0
+
+            if total and total > MAX_DOWNLOAD_SIZE_BYTES:
                 raise RuntimeError(
-                    f"File too large ({int(content_length) / 1024**2:.0f} MB). Max is 2 GB."
+                    f"File too large ({total / 1024**2:.0f} MB). Max is 2 GB."
                 )
 
             ext  = _ext_from_url(url) or _ext_from_content_type(resp.headers.get("Content-Type", "")) or ".mp4"
             dest = os.path.join(TEMP_DIR, f"{job_id}_downloaded{ext}")
 
-            downloaded = 0
+            downloaded  = 0
+            start_time  = _time.time()
+            last_update = 0.0
+
             async with aiofiles.open(dest, "wb") as fh:
                 async for chunk in resp.content.iter_chunked(256 * 1024):
                     downloaded += len(chunk)
                     if downloaded > MAX_DOWNLOAD_SIZE_BYTES:
                         raise RuntimeError("Download exceeded 2 GB limit.")
                     await fh.write(chunk)
+
+                    # Update progress every 3 seconds
+                    now = _time.time()
+                    if progress_msg and (now - last_update) >= 3:
+                        last_update = now
+                        elapsed    = max(now - start_time, 0.1)
+                        speed      = downloaded / elapsed
+                        speed_str  = f"{format_size(int(speed))}/s"
+
+                        if total > 0:
+                            pct     = min(int(downloaded * 100 / total), 99)
+                            filled  = pct // 5
+                            bar     = "█" * filled + "░" * (20 - filled)
+                            remain  = total - downloaded
+                            eta     = int(remain / speed) if speed > 0 else 0
+                            eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
+                            text = (
+                                f"🌐 **Downloading from URL…**\n\n"
+                                f"`{bar}`\n"
+                                f"**{pct}%** — {format_size(downloaded)} / {format_size(total)}\n"
+                                f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                            )
+                        else:
+                            text = (
+                                f"🌐 **Downloading from URL…**\n\n"
+                                f"📥 {format_size(downloaded)} downloaded\n"
+                                f"🚀 {speed_str}"
+                            )
+                        try:
+                            await progress_msg.edit(text)
+                        except Exception:
+                            pass
 
             logger.info(f"Downloaded {downloaded / 1024**2:.1f} MB → {dest}")
             return dest

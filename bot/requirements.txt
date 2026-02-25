@@ -5,11 +5,16 @@ tgcrypto==1.2.5
 # ── Environment variables ─────────────────────────────────────────
 python-dotenv==1.0.1
 
-# ── Async file I/O and HTTP (for URL downloads) ───────────────────
+# ── Async file I/O and HTTP ───────────────────────────────────────
 aiofiles==24.1.0
 aiohttp==3.10.10
 
+# ── Video downloading (YouTube, Twitter, TikTok, etc.) ───────────
+yt-dlp==2024.11.18
+
+# ── System stats for /stats command ──────────────────────────────
+psutil==6.1.1
+
 # ── NOTE: FFmpeg must be installed separately ─────────────────────
-#   Windows: https://ffmpeg.org/download.html  (add to PATH)
-#   Ubuntu:  sudo apt install ffmpeg
-#   macOS:   brew install ffmpeg
+#   Dockerfile handles this automatically
+#   libtorrent is optional — only needed for magnet links

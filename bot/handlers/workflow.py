@@ -11,6 +11,7 @@ States:
 """
 
 import os
+import asyncio
 import re
 import time
 import uuid
@@ -30,7 +31,9 @@ from config import (
     RESOLUTIONS, MAX_FILE_SIZE_BYTES,
 )
 from utils.file_utils import format_size, output_filename, cleanup
+from utils.queue import register, update_status, set_task, finish
 from processors.ffmpeg import burn_subtitles, change_resolution, download_url
+from processors.leech import ytdlp_download, detect_link_type
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +45,37 @@ URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 
 
 # ── Keyboards ─────────────────────────────────────────────────────
-def operation_keyboard():
+def operation_keyboard(mode: str = "upload"):
+    """
+    mode="upload"  → Burn Subtitles + Change Resolution
+    mode="direct"  → Leech + Burn Subtitles + Change Resolution
+    mode="m3u8"    → Leech (res picker) + Burn Subtitles
+    mode="magnet"  → Leech (download only) + Burn Subtitles
+    """
+    if mode == "upload":
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🔤 Burn Subtitles",    callback_data="op:subtitles"),
+                InlineKeyboardButton("📐 Change Resolution", callback_data="op:resolution"),
+            ],
+            [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
+        ])
+    elif mode == "direct":
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("📥 Leech (download only)", callback_data="op:leech")],
+            [
+                InlineKeyboardButton("🔤 Burn Subtitles",    callback_data="op:subtitles"),
+                InlineKeyboardButton("📐 Change Resolution", callback_data="op:resolution"),
+            ],
+            [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
+        ])
+    elif mode in ("m3u8", "magnet"):
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("📥 Leech (download only)", callback_data="op:leech")],
+            [InlineKeyboardButton("🔤 Burn Subtitles",        callback_data="op:subtitles")],
+            [InlineKeyboardButton("❌ Cancel",                callback_data="op:cancel")],
+        ])
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🔤 Burn Subtitles",    callback_data="op:subtitles"),
-            InlineKeyboardButton("📐 Change Resolution", callback_data="op:resolution"),
-        ],
         [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
     ])
 
@@ -129,13 +157,23 @@ async def _video_accepted(msg: Message, source: str, file_id: str = "",
 
     if source == "upload":
         desc = f"📁 `{file_name}`  ·  {format_size(file_size)}"
+        mode = "upload"
+    elif source == "ytdlp":
+        short = url[:60] + "…" if len(url) > 60 else url
+        desc  = f"📡 **HLS Stream detected**\n`{short}`"
+        mode  = "m3u8"
+    elif source == "magnet":
+        short = url[:60] + "…" if len(url) > 60 else url
+        desc  = f"🧲 **Magnet link**\n`{short}`"
+        mode  = "magnet"
     else:
         short = url[:60] + "…" if len(url) > 60 else url
         desc  = f"🔗 `{short}`"
+        mode  = "direct"
 
     await msg.reply(
         f"🎬 **Video ready**\n\n{desc}\n\nWhat do you want to do?",
-        reply_markup=operation_keyboard(),
+        reply_markup=operation_keyboard(mode=mode),
     )
 
 
@@ -189,19 +227,35 @@ async def recv_text(client: Client, msg: Message):
         await msg.reply("📎 Please send the subtitle as a **file attachment**.")
         return
 
-    match = URL_RE.search(msg.text or "")
+    text = msg.text or ""
+
+    # Check for magnet link first (doesn't start with http)
+    if text.strip().lower().startswith("magnet:"):
+        await _video_accepted(msg, "magnet", url=text.strip(), file_name="torrent")
+        return
+
+    match = URL_RE.search(text)
     if not match:
         await msg.reply(
-            "👋 Send me a video file or a direct URL to get started.\n\n"
-            "Example: `https://example.com/video.mp4`\n\n"
+            "👋 Send me a video file, a direct URL, or a magnet link to get started.\n\n"
+            "Examples:\n"
+            "• `https://example.com/video.mp4`\n"
+            "• `https://youtube.com/watch?v=...`\n"
+            "• `magnet:?xt=urn:btih:...`\n\n"
             "Use /help for instructions."
         )
         return
 
     url = match.group(0)
-    await _video_accepted(msg, "url",
-                          url=url,
-                          file_name=Path(url.split("?")[0]).name or "video.mp4")
+
+    if ".m3u8" in url.lower():
+        await _video_accepted(msg, "ytdlp", url=url, file_name="stream.mp4")
+    elif url.lower().startswith("magnet:"):
+        await _video_accepted(msg, "magnet", url=url, file_name="torrent")
+    else:
+        await _video_accepted(msg, "url",
+                              url=url,
+                              file_name=Path(url.split("?")[0]).name or "video.mp4")
 
 
 # ── Callback: Operation chosen ────────────────────────────────────
@@ -219,6 +273,47 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
 
     if not data.get("source"):
         await cb.answer("⚠️ Session expired — send your video again.", show_alert=True)
+        return
+
+    if op == "leech":
+        STATE.pop(uid, None)
+        await cb.answer()
+        progress_msg = await cb.message.edit("⏳ **Starting…**")
+        job_id = str(uuid.uuid4())[:8]
+        path   = None
+        source = data.get("source", "url")
+        url    = data.get("url", "")
+
+        try:
+            from processors.leech import ytdlp_download, direct_download, magnet_download, get_formats
+            from handlers.leech import _upload_file, format_keyboard, YTDLP_STATE
+
+            if source == "ytdlp":
+                # m3u8 — show all available resolutions first
+                await progress_msg.edit("🔍 **Fetching available qualities…**\n_Please wait…_")
+                formats, title = await get_formats(url)
+                YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
+                await progress_msg.edit(
+                    f"📡 **{title}**\n\n📐 Choose download quality:",
+                    reply_markup=format_keyboard(formats, job_id),
+                )
+
+            elif source == "magnet":
+                # Magnet — download via libtorrent and upload
+                path = await magnet_download(url, job_id, progress_msg=progress_msg)
+                await _upload_file(client, cb.message, progress_msg, path)
+
+            else:
+                # Direct URL — stream download and upload
+                path = await direct_download(url, job_id, progress_msg=progress_msg)
+                await _upload_file(client, cb.message, progress_msg, path)
+
+        except Exception as e:
+            logger.error(f"Leech failed: {e}", exc_info=True)
+            await progress_msg.edit(f"❌ **Download failed**\n\n`{str(e)[:300]}`")
+        finally:
+            if path:
+                cleanup(path)
         return
 
     if op == "subtitles":
@@ -341,6 +436,7 @@ async def resolution_chosen(client: Client, cb: CallbackQuery):
         logger.error(f"Resolution change failed: {e}", exc_info=True)
         await progress_msg.edit(f"❌ **Conversion failed**\n\n`{str(e)[:300]}`")
     finally:
+        finish(job_id)
         cleanup(video_path, output_path)
 
 
@@ -363,7 +459,29 @@ async def _get_video(client: Client, data: dict, job_id: str, progress_msg) -> s
 
     elif source == "url":
         await progress_msg.edit("⏳ **Downloading from URL…**\n_Large files may take a while._")
-        return await download_url(data["url"], job_id)
+        return await download_url(data["url"], job_id, progress_msg=progress_msg)
+
+    elif source == "ytdlp":
+        # m3u8 — download best quality for processing
+        await progress_msg.edit(
+            "📡 **Downloading HLS stream…**\n"
+            "_Fetching and merging all segments via yt-dlp…_"
+        )
+        return await ytdlp_download(
+            data["url"],
+            "bestvideo+bestaudio/best",
+            job_id,
+            progress_msg=progress_msg,
+        )
+
+    elif source == "magnet":
+        # Magnet — download via libtorrent before processing
+        from processors.leech import magnet_download
+        await progress_msg.edit(
+            "🧲 **Downloading torrent…**\n"
+            "_Connecting to peers…_"
+        )
+        return await magnet_download(data["url"], job_id, progress_msg=progress_msg)
 
     raise RuntimeError("Unknown video source in session state.")
 

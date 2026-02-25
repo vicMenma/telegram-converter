@@ -13,6 +13,11 @@ API_ID       = int(os.getenv("API_ID", "0"))
 API_HASH     = os.getenv("API_HASH", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://your-mini-app.vercel.app")
 
+# ── Admin ─────────────────────────────────────────────────────────
+# Your Telegram user ID — only this user can use /queue
+# Find your ID by messaging @userinfobot on Telegram
+ADMIN_ID     = int(os.getenv("ADMIN_ID", "0"))
+
 # ── Storage ───────────────────────────────────────────────────────
 TEMP_DIR            = os.getenv("TEMP_DIR", "C:/tmp/tgvideobot").replace("\\", "/")
 MAX_FILE_SIZE_BYTES = 2 * 1024 ** 3   # 2 GB — Telegram's actual limit

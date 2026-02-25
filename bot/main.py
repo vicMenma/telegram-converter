@@ -10,9 +10,9 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
-# Import handlers so their decorators register with the app
 import handlers.start
 import handlers.workflow
+import handlers.leech
 
 if __name__ == "__main__":
     logging.info("Bot starting...")
