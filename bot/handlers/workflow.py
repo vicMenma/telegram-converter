@@ -262,6 +262,12 @@ async def recv_file(client: Client, msg: Message):
 @app.on_message(filters.private & filters.text & ~filters.command(["start", "help"]))
 async def recv_text(client: Client, msg: Message):
     uid  = msg.from_user.id
+
+    # Let settings channel input handler take priority
+    from handlers.settings import _WAITING_CHANNEL
+    if uid in _WAITING_CHANNEL:
+        return
+
     data = STATE.get(uid, {})
 
     if data.get("state") == "waiting_for_subtitle":
