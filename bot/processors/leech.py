@@ -186,6 +186,9 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
 
         asyncio.run_coroutine_threadsafe(_safe_edit(progress_msg, text), loop)
 
+    import shutil as _shutil
+    _aria2c = _shutil.which("aria2c")
+
     ydl_opts = {
         "format":              format_id,
         "outtmpl":             output_template,
@@ -193,7 +196,7 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
         "no_warnings":         True,
         "progress_hooks":      [progress_hook],
         "merge_output_format": "mp4",
-        "concurrent_fragment_downloads": 8,   # parallel HLS/DASH fragments
+        "concurrent_fragment_downloads": 16,  # parallel HLS/DASH fragments
         "http_chunk_size":     10 * 1024 * 1024,  # 10MB chunks
         "buffersize":          1024 * 1024,        # 1MB buffer
         "postprocessors": [{
@@ -201,6 +204,19 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
             "preferedformat": "mp4",
         }],
     }
+
+    # Use aria2c if available — much faster for large files
+    if _aria2c:
+        ydl_opts["external_downloader"] = "aria2c"
+        ydl_opts["external_downloader_args"] = [
+            "--max-connection-per-server=16",  # 16 connections per server
+            "--min-split-size=1M",             # split into 1MB chunks
+            "--split=16",                      # 16 parallel splits
+            "--max-concurrent-downloads=16",
+            "--file-allocation=none",          # faster start
+            "--auto-file-renaming=false",
+            "--quiet=true",
+        ]
 
     def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -233,14 +249,121 @@ async def _safe_edit(msg, text):
 
 # ── Direct URL download ────────────────────────────────────────────
 
+async def _get_file_info(url: str) -> tuple[int, str]:
+    """HEAD request to get file size and extension."""
+    import aiohttp
+    connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
+    async with aiohttp.ClientSession(connector=connector, headers={"User-Agent": "Mozilla/5.0"}) as session:
+        async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            ct    = resp.headers.get("Content-Type", "")
+            ext   = Path(url.split("?")[0]).suffix.lower()
+            if not ext:
+                ct_map = {
+                    "video/mp4": ".mp4", "video/x-matroska": ".mkv",
+                    "video/webm": ".webm", "application/zip": ".zip",
+                    "application/x-rar": ".rar", "application/pdf": ".pdf",
+                }
+                ext = ct_map.get(ct.split(";")[0].strip(), ".bin")
+            return total, ext
+
+
+async def _aria2c_download(url: str, dest: str, progress_msg=None, total: int = 0) -> None:
+    """Download using aria2c with 16 parallel connections."""
+    import shutil as _shutil
+    aria2c = _shutil.which("aria2c")
+    if not aria2c:
+        raise RuntimeError("aria2c not found")
+
+    dest_dir  = os.path.dirname(dest)
+    dest_file = os.path.basename(dest)
+
+    cmd = [
+        aria2c,
+        "--max-connection-per-server=16",
+        "--min-split-size=1M",
+        "--split=16",
+        "--max-concurrent-downloads=16",
+        "--file-allocation=none",
+        "--auto-file-renaming=false",
+        "--allow-overwrite=true",
+        "--dir", dest_dir,
+        "--out", dest_file,
+        url,
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    start_time  = time.time()
+    last_update = 0.0
+
+    async def _track():
+        nonlocal last_update
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            now = time.time()
+            if progress_msg and (now - last_update) >= 3:
+                last_update = now
+                downloaded = os.path.getsize(dest) if os.path.exists(dest) else 0
+                elapsed    = max(now - start_time, 0.1)
+                speed      = downloaded / elapsed
+                speed_str  = f"{format_size(int(speed))}/s"
+                if total > 0:
+                    pct    = min(int(downloaded * 100 / total), 99)
+                    filled = pct // 5
+                    bar    = "█" * filled + "░" * (20 - filled)
+                    remain = total - downloaded
+                    eta    = int(remain / speed) if speed > 0 else 0
+                    eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
+                    text   = (
+                        f"🌐 **Downloading file…**\n\n"
+                        f"`{bar}`\n"
+                        f"**{pct}%** — {format_size(downloaded)} / {format_size(total)}\n"
+                        f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                    )
+                else:
+                    text = f"🌐 **Downloading file…**\n\n📦 {format_size(downloaded)}\n🚀 {speed_str}"
+                try:
+                    await progress_msg.edit(text)
+                except Exception:
+                    pass
+
+    await asyncio.gather(_track(), proc.wait())
+    if proc.returncode != 0:
+        raise RuntimeError("aria2c download failed")
+
+
 async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
     """
-    Download any direct file URL with streaming progress.
+    Download any direct file URL with parallel chunks via aria2c.
+    Falls back to aiohttp if aria2c is not available.
     Returns local file path.
     """
     import aiohttp
     import aiofiles
+    import shutil as _shutil
 
+    total, ext = await _get_file_info(url)
+
+    if total > MAX_DOWNLOAD_SIZE_BYTES:
+        raise RuntimeError(f"File too large ({total / 1024**2:.0f} MB). Max is 2 GB.")
+
+    dest = os.path.join(TEMP_DIR, f"{job_id}_direct{ext}")
+
+    # Use aria2c if available — 16 parallel connections
+    if _shutil.which("aria2c"):
+        logger.info("Using aria2c for direct download")
+        await _aria2c_download(url, dest, progress_msg=progress_msg, total=total)
+        return dest
+
+    # Fallback: aiohttp parallel chunks
+    logger.info("Using aiohttp for direct download")
     connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
     async with aiohttp.ClientSession(
         connector=connector,
@@ -256,24 +379,6 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
                     "Make sure the URL is a direct download link."
                 )
 
-            total = int(resp.headers.get("Content-Length", 0))
-            if total > MAX_DOWNLOAD_SIZE_BYTES:
-                raise RuntimeError(
-                    f"File too large ({total / 1024**2:.0f} MB). Max is 2 GB."
-                )
-
-            # Guess extension from URL or Content-Type
-            ct  = resp.headers.get("Content-Type", "")
-            ext = Path(url.split("?")[0]).suffix.lower()
-            if not ext:
-                ct_map = {
-                    "video/mp4": ".mp4", "video/x-matroska": ".mkv",
-                    "video/webm": ".webm", "application/zip": ".zip",
-                    "application/x-rar": ".rar", "application/pdf": ".pdf",
-                }
-                ext = ct_map.get(ct.split(";")[0].strip(), ".bin")
-
-            dest       = os.path.join(TEMP_DIR, f"{job_id}_direct{ext}")
             downloaded = 0
             start_time = time.time()
             last_update = 0.0

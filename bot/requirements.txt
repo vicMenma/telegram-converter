@@ -1,6 +1,6 @@
 # ── Telegram client (MTProto — no 50 MB limit) ────────────────────
-pyrogram==2.0.106
-tgcrypto==1.2.5
+pyrofork==2.3.38
+TgCrypto==1.2.5
 
 # ── Environment variables ─────────────────────────────────────────
 python-dotenv==1.0.1
@@ -15,6 +15,7 @@ yt-dlp==2024.11.18
 # ── System stats for /stats command ──────────────────────────────
 psutil==6.1.1
 
-# ── NOTE: FFmpeg must be installed separately ─────────────────────
+# ── NOTE: FFmpeg and aria2c must be installed separately ──────────
 #   Dockerfile handles this automatically
 #   libtorrent is optional — only needed for magnet links
+libtorrent

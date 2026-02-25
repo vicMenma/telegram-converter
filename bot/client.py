@@ -1,6 +1,6 @@
 """
 Pyrogram client instance — imported by both main.py and handlers.
-Keeping it in a separate file breaks the circular import.
+Using pyrofork — a faster fork of pyrogram with optimized MTProto.
 """
 
 from pyrogram import Client
@@ -11,4 +11,6 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
+    workers=16,
+    max_concurrent_transmissions=10,
 )

@@ -123,14 +123,14 @@ def make_progress(msg, action: str, known_total: int = 0):
             eta     = int(remain / speed) if speed > 0 else 0
             eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
             text = (
-                f"⏳ **{action}**\n\n"
+                f"**{action}**\n\n"
                 f"`{bar}`\n"
                 f"**{pct}%** — {format_size(current)} / {format_size(real_total)}\n"
                 f"🚀 {speed_str} · ⏱ ETA {eta_str}"
             )
         else:
             text = (
-                f"⏳ **{action}**\n\n"
+                f"**{action}**\n\n"
                 f"📥 {format_size(current)} transferred\n"
                 f"🚀 {speed_str}"
             )
@@ -209,7 +209,7 @@ async def recv_file(client: Client, msg: Message):
             status = await msg.reply(
                 f"🌱 **Torrent file detected!**\n\n"
                 f"📄 `{torrent_name}`\n\n"
-                f"⏳ Downloading torrent file…"
+                f"_Downloading torrent file…_"
             )
 
             # Download the .torrent file first
@@ -274,7 +274,7 @@ async def recv_text(client: Client, msg: Message):
             if ext not in SUBTITLE_EXTENSIONS:
                 ext = ".srt"
 
-            status = await msg.reply("⏳ **Downloading subtitle…**")
+            status = await msg.reply("_Downloading subtitle…_")
             sub_job = str(uuid.uuid4())[:8]
             sub_path = os.path.join(TEMP_DIR, f"{sub_job}_sub{ext}")
 
@@ -286,13 +286,13 @@ async def recv_text(client: Client, msg: Message):
                         timeout=aiohttp.ClientTimeout(total=60)
                     ) as resp:
                         if resp.status != 200:
-                            await status.edit(f"❌ Could not download subtitle — HTTP {resp.status}")
+                            await status.edit(f"❌ Could not download subtitle — HTTP `{resp.status}`")
                             return
                         async with aiofiles.open(sub_path, "wb") as f:
                             async for chunk in resp.content.iter_chunked(256 * 1024):
                                 await f.write(chunk)
 
-                await status.edit("✅ **Subtitle downloaded!** Processing…")
+                await status.edit("_Subtitle downloaded — processing…_")
 
                 # Inject downloaded subtitle path into state and trigger burn
                 STATE[uid]["sub_path"]  = sub_path
@@ -307,7 +307,7 @@ async def recv_text(client: Client, msg: Message):
             return
 
         await msg.reply(
-            "📎 Send your subtitle as a **file** or paste a **direct URL**.\n\n"
+            "📎 _Send your subtitle as a file or paste a direct URL._\n\n"
             "Example: `https://example.com/subtitle.srt`"
         )
         return
@@ -352,7 +352,7 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
 
     if op == "cancel":
         STATE.pop(uid, None)
-        await cb.message.edit("❌ Cancelled.")
+        await cb.message.edit("_Cancelled._")
         await cb.answer()
         return
 
@@ -363,7 +363,7 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
     if op == "leech":
         STATE.pop(uid, None)
         await cb.answer()
-        progress_msg = await cb.message.edit("⏳ **Starting…**")
+        progress_msg = await cb.message.edit("_Starting…_")
         job_id   = str(uuid.uuid4())[:8]
         path     = None
         source   = data.get("source", "url")
@@ -376,7 +376,7 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
 
             if source == "ytdlp":
                 # m3u8 — show all available resolutions first (no job registered yet)
-                await progress_msg.edit("🔍 **Fetching available qualities…**\n_Please wait…_")
+                await progress_msg.edit("_Fetching available qualities…_")
                 formats, title = await get_formats(url)
                 YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
                 await progress_msg.edit(
@@ -400,7 +400,7 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
 
         except Exception as e:
             logger.error(f"Leech failed: {e}", exc_info=True)
-            await progress_msg.edit(f"❌ **Download failed**\n\n`{str(e)[:300]}`")
+            await progress_msg.edit(f"❌ **Download Failed**\n\n`{str(e)[:200]}`")
         finally:
             finish(job_id)
             if path:
@@ -410,7 +410,9 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
     if op == "subtitles":
         STATE[uid]["state"] = "waiting_for_subtitle"
         await cb.message.edit(
-            "🔤 **Burn Subtitles**\n\n"
+            "╔══════════════════════════════╗\n"
+            "    ✦  **BURN SUBTITLES**\n"
+            "╚══════════════════════════════╝\n\n"
             "Send me your subtitle file **or** paste a direct URL to download it.\n\n"
             "📎 **File:** `.srt` · `.ass` · `.ssa` · `.vtt` · `.sub` · `.txt`\n"
             "🔗 **URL:** `https://example.com/subtitle.srt`"
@@ -418,7 +420,10 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
     elif op == "resolution":
         STATE[uid]["state"] = "choosing_resolution"
         await cb.message.edit(
-            "📐 **Change Resolution**\n\nChoose the target resolution:",
+            "╔══════════════════════════════╗\n"
+            "    ✦  **CHANGE RESOLUTION**\n"
+            "╚══════════════════════════════╝\n\n"
+            "_Choose the target resolution:_",
             reply_markup=resolution_keyboard(),
         )
 
@@ -566,7 +571,7 @@ async def _get_video(client: Client, data: dict, job_id: str, progress_msg) -> s
         await client.download_media(
             data["file_id"],
             file_name=video_path,
-            progress=make_progress(progress_msg, "Downloading from Telegram…", known_total=file_size),
+            progress=make_progress(progress_msg, "Downloading…", known_total=file_size),
         )
         return video_path
 
@@ -692,23 +697,18 @@ async def _send_output(client: Client, msg: Message, progress_msg,
             pass
 
     await progress_msg.edit(
-        f"📤 **Uploading…**\n\n`░░░░░░░░░░░░░░░░░░░░` 0%\n📦 {format_size(out_size)}"
+        f"_Uploading…_ `0%`\n📦 {format_size(out_size)}"
     )
 
-    # Use user account for uploads if available — much faster than bot
-    user = get_user_client()
-    uploader = user if user and user.is_connected else client
-    if uploader is not client:
-        logger.info("Using user account for upload")
-
-    await uploader.send_video(
+    # Always use bot client to send — user account doesn't have access to user chats
+    await client.send_video(
         chat_id=msg.chat.id,
         video=output_path,
         thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
         duration=duration,
         width=width   if width  else None,
         height=height if height else None,
-        caption="✅ Done!",
+        caption="✅ Done",
         file_name=out_name,
         supports_streaming=True,
         progress=upload_progress,
