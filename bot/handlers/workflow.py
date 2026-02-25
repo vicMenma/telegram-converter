@@ -410,9 +410,8 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
     if op == "subtitles":
         STATE[uid]["state"] = "waiting_for_subtitle"
         await cb.message.edit(
-            "╔══════════════════════════════╗\n"
-            "    ✦  **BURN SUBTITLES**\n"
-            "╚══════════════════════════════╝\n\n"
+            "🔤✨ **BURN SUBTITLES** ✨🔤\n"
+            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "Send me your subtitle file **or** paste a direct URL to download it.\n\n"
             "📎 **File:** `.srt` · `.ass` · `.ssa` · `.vtt` · `.sub` · `.txt`\n"
             "🔗 **URL:** `https://example.com/subtitle.srt`"
@@ -420,9 +419,8 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
     elif op == "resolution":
         STATE[uid]["state"] = "choosing_resolution"
         await cb.message.edit(
-            "╔══════════════════════════════╗\n"
-            "    ✦  **CHANGE RESOLUTION**\n"
-            "╚══════════════════════════════╝\n\n"
+            "📐✨ **CHANGE RESOLUTION** ✨📐\n"
+            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "_Choose the target resolution:_",
             reply_markup=resolution_keyboard(),
         )
@@ -733,10 +731,9 @@ async def _send_output(client: Client, msg: Message, progress_msg,
         await client.send_message(
             chat_id=msg.chat.id,
             text=(
-                "╔══════════════════════════════╗\n"
-                "    📢  **FORWARD TO CHANNEL**\n"
-                "╚══════════════════════════════╝\n\n"
-                "_Would you like to forward this file to your channel?_"
+                "📢✨ **FORWARD TO CHANNEL?** ✨📢\n"
+                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                "_Would you like to send this file to your channel?_"
             ),
             reply_markup=_forward_keyboard(sent.id),
         )

@@ -39,83 +39,88 @@ def main_menu_keyboard():
 
 # ── Welcome message ───────────────────────────────────────────────
 
-WELCOME = """╔══════════════════════════════╗
-    🎬  **VIDEO STUDIO BOT**
-╚══════════════════════════════╝
+WELCOME = """🎬✨ __Welcome to **Video Studio Bot**!__ ✨🎬
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-_Your personal video lab — inside Telegram._
-_No apps. No watermarks. No file size drama._
+Your all-in-one video tool — right inside Telegram.
+No apps. No watermarks. No limits. 🚀
 
-──────────────────────────────
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-**✦ BURN SUBTITLES**
-Permanently embed subs into your video.
-Supports `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
+🔤 **BURN SUBTITLES**
+> Permanently embed subtitles into your video.
+> 📄 Supports: `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
 
-**✦ CHANGE RESOLUTION**
-Re-encode to any resolution in seconds.
-`360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
+📐 **CHANGE RESOLUTION**
+> Re-encode to any standard resolution instantly.
+> 🖥 `360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
 
-**⬇︎  LEECH A LINK**
-YouTube, Twitter, TikTok, Instagram & 1000+ sites.
-Pick your quality before downloading.
+🔗 **LEECH ANY LINK**
+> YouTube, Twitter, Instagram, TikTok & 1000+ sites.
+> Pick your quality before downloading! 🎯
 
-**🧲 MAGNET / TORRENT**
-Drop any magnet link — bot handles the rest.
+🧲 **MAGNET / TORRENT**
+> Paste any magnet link or drop a `.torrent` file.
+> Bot downloads and sends it straight to you. 📥
 
-──────────────────────────────
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-📁 Up to **2 GB** per file
-⚡ Powered by **FFmpeg** + **yt-dlp**
-🔒 Files auto-deleted after processing
+💪 **WHY USE THIS BOT?**
 
-👇 _Send a video or paste any link to begin_"""
+📁 Up to **2 GB** — zero Telegram restrictions
+⚡ Powered by **FFmpeg + yt-dlp** — industry standard
+🔒 **Privacy first** — files deleted right after processing
+📱 Works on **any device** — phone, tablet, desktop
+
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+
+👇 **Ready? Send a video, or paste any link below!**"""
 
 
 # ── Help message ──────────────────────────────────────────────────
 
-HELP_TEXT = """╔══════════════════════════════╗
-    📖  **HOW TO USE**
-╚══════════════════════════════╝
+HELP_TEXT = """❓✨ **HOW TO USE VIDEO STUDIO BOT** ✨❓
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-──────────────────────────────
-**STEP 1 — Provide your video**
+**📤 STEP 1 — Send your video**
 
 📎 **Upload a file** _(up to 2 GB)_
-Drop any video directly in the chat.
-`MP4` `MKV` `AVI` `MOV` `WEBM` `FLV` `TS` `3GP`
+Drop your video directly in the chat.
+Supported: `MP4` `MKV` `AVI` `MOV` `WEBM` `FLV` `TS` `3GP`
 
-🔗 **Paste a URL**
-Direct link or supported site:
-`https://example.com/video.mp4`
+🔗 **Send a URL** _(direct link or supported site)_
+> `https://example.com/video.mp4`
 
-🧲 **Magnet link**
-`magnet:?xt=urn:btih:…`
+🧲 **Send a magnet link**
+> `magnet:?xt=urn:btih:…`
 
-──────────────────────────────
-**STEP 2 — Choose an operation**
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-**✦ Burn Subtitles**
-① Send video → tap **Burn Subtitles**
-② Send subtitle file or paste a URL
-③ Receive your video with permanent subs ✅
+🔤 **BURNING SUBTITLES**
+> 1️⃣ Send your video
+> 2️⃣ Tap 🔤 **Burn Subtitles**
+> 3️⃣ Send subtitle file or paste a URL
+> 4️⃣ Receive your video with permanent subs ✅
 
-Formats: `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
+📄 Formats: `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
 
-**✦ Change Resolution**
-① Send video → tap **Change Resolution**
-② Pick your target resolution
-③ Receive re-encoded video ✅
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-Options: `360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
+📐 **CHANGING RESOLUTION**
+> 1️⃣ Send your video
+> 2️⃣ Tap 📐 **Change Resolution**
+> 3️⃣ Pick your target resolution
+> 4️⃣ Receive your re-encoded video ✅
 
-──────────────────────────────
-**💡 TIPS**
+🖥 Options: `360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
 
-› 720p is the sweet spot for quality vs size
-› ASS preserves custom subtitle styles & fonts
-› SRT is the most compatible subtitle format
-› Lower resolution = faster processing"""
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+
+💡 **TIPS**
+> 🔸 720p is the sweet spot for quality vs size
+> 🔸 ASS subtitles preserve custom fonts and styles
+> 🔸 SRT is the safest format for compatibility
+> 🔸 Lower resolution = smaller file = faster upload"""
 
 
 # ── Stats ─────────────────────────────────────────────────────────
@@ -146,34 +151,31 @@ def _get_stats() -> str:
             if pct < thresholds[1]: return "🟡"
             return "🔴"
 
-        return f"""╔══════════════════════════════╗
-    📡  **SERVER STATS**
-╚══════════════════════════════╝
+        return f"""📊✨ **SERVER STATS** ✨📊
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-{dot(cpu)} **CPU**
-`{bar(cpu)}` {cpu:.1f}%
+{dot(cpu)} **CPU Usage**
+`{bar(cpu)}` **{cpu:.1f}%**
 
-{dot(ram.percent)} **RAM**
-`{bar(ram.percent)}` {ram.percent:.1f}%
-_{ram_used:.2f} GB used of {ram_total:.2f} GB_
+{dot(ram.percent)} **RAM Usage**
+`{bar(ram.percent)}` **{ram.percent:.1f}%**
+> 💾 `{ram_used:.2f} GB / {ram_total:.2f} GB` used
 
-{dot(disk.percent)} **Disk**
-`{bar(disk.percent)}` {disk.percent:.1f}%
-_{disk_used:.1f} GB used · {disk_free:.1f} GB free_
+{dot(disk.percent)} **Disk Usage**
+`{bar(disk.percent)}` **{disk.percent:.1f}%**
+> 📁 `{disk_used:.1f} GB` used · `{disk_free:.1f} GB` free
 
-──────────────────────────────
-⏱ **Uptime** `{uptime_str}`
-🐍 **Python** `{platform.python_version()}`
-🖥 **OS** `{platform.system()} {platform.release()}`"""
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+⏱ **Uptime:** `{uptime_str}`
+🐍 **Python:** `{platform.python_version()}`
+🖥 **OS:** `{platform.system()} {platform.release()}`"""
 
     except ImportError:
-        return f"""╔══════════════════════════════╗
-    📡  **SERVER STATS**
-╚══════════════════════════════╝
-
-⏱ **Uptime** `{uptime_str}`
-🐍 **Python** `{platform.python_version()}`
-🖥 **OS** `{platform.system()} {platform.release()}`
+        return f"""📊✨ **SERVER STATS** ✨📊
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+⏱ **Uptime:** `{uptime_str}`
+🐍 **Python:** `{platform.python_version()}`
+🖥 **OS:** `{platform.system()} {platform.release()}`
 
 _⚠️ Install psutil for full stats_"""
 
@@ -182,21 +184,20 @@ _⚠️ Install psutil for full stats_"""
 
 def _queue_text(jobs: list) -> str:
     lines = [
-        f"╔══════════════════════════════╗\n"
-        f"    ⚙️  **ACTIVE JOBS** — {len(jobs)} running\n"
-        f"╚══════════════════════════════╝\n"
+        f"⚙️✨ **ACTIVE JOBS** — {len(jobs)} running ✨⚙️\n"
+        f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
     ]
     for job in jobs:
         emoji   = TYPE_EMOJI.get(job["type"], "⚙️")
         elapsed = elapsed_str(job["started"])
         desc    = job["desc"][:40] + "…" if len(job["desc"]) > 40 else job["desc"]
         lines.append(
-            f"{emoji} **{job['type'].upper()}**\n"
-            f"👤 {job['username']}\n"
-            f"📄 `{desc}`\n"
-            f"📊 _{job['status']}_\n"
-            f"⏱ `{elapsed}` elapsed\n"
-            f"──────────────────────────────"
+            f"{emoji} **{job['type'].upper()}** · `{job['job_id']}`\n"
+            f"> 👤 {job['username']}\n"
+            f"> 📄 `{desc}`\n"
+            f"> 📊 {job['status']}\n"
+            f"> ⏱ Running `{elapsed}`\n"
+            f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
         )
     return "\n".join(lines)
 
@@ -226,7 +227,7 @@ async def cmd_start(client: Client, msg: Message):
 @app.on_message(filters.command("help") & filters.private)
 async def cmd_help(client: Client, msg: Message):
     await msg.reply(HELP_TEXT, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("‹ Back to Menu", callback_data="menu:start")]
+        [InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]
     ]))
 
 
@@ -246,10 +247,7 @@ async def cmd_queue(client: Client, msg: Message):
     jobs = get_all()
     if not jobs:
         await msg.reply(
-            "╔══════════════════════════════╗\n"
-            "    ⚙️  **ACTIVE JOBS**\n"
-            "╚══════════════════════════════╝\n\n"
-            "_No jobs running right now._"
+            "⚙️✨ **ACTIVE JOBS** ✨⚙️\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n_No jobs running right now._"
         )
         return
     await msg.reply(_queue_text(jobs), reply_markup=_queue_keyboard(jobs))
@@ -315,36 +313,33 @@ async def menu_callbacks(client: Client, cb: CallbackQuery):
 
     if action == "leech":
         await cb.message.reply(
-            "╔══════════════════════════════╗\n"
-            "    ⬇︎  **LEECH A LINK**\n"
-            "╚══════════════════════════════╝\n\n"
-            "Paste any link and I'll download it for you.\n\n"
-            "**Supported sources**\n"
-            "› YouTube · Twitter · Instagram\n"
-            "› TikTok · Vimeo · Facebook\n"
-            "› Direct file links `.mp4` `.mkv` `.zip`…\n"
-            "› 1000+ more sites via yt-dlp\n\n"
-            "_Quality selector shown automatically for YouTube_ 🎯"
+            "🔗✨ **LEECH ANY LINK** ✨🔗\n"
+            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+            "Paste any link and I'll download it for you!\n\n"
+            "> 🎬 YouTube · Twitter · Instagram\n"
+            "> 📱 TikTok · Vimeo · Facebook\n"
+            "> 🔗 Direct `.mp4` `.mkv` `.zip` links\n"
+            "> 🌐 1000+ more sites via yt-dlp\n\n"
+            "💡 _Quality selector shown for YouTube & supported sites_ 🎯"
         )
     elif action == "magnet":
         await cb.message.reply(
-            "╔══════════════════════════════╗\n"
-            "    🧲  **MAGNET / TORRENT**\n"
-            "╚══════════════════════════════╝\n\n"
+            "🧲✨ **MAGNET / TORRENT** ✨🧲\n"
+            "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "Paste a magnet link or upload a `.torrent` file.\n\n"
-            "**Example**\n"
-            "`magnet:?xt=urn:btih:…`\n\n"
-            "_Bot connects to peers, downloads and uploads directly to you_ 📥"
+            "> **Example:**\n"
+            "> `magnet:?xt=urn:btih:…`\n\n"
+            "📥 _Bot connects to peers, downloads and sends straight to you._"
         )
     elif action == "help":
         await cb.message.reply(HELP_TEXT, reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("‹ Back to Menu", callback_data="menu:start")]
+            [InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]
         ]))
     elif action == "stats":
         await cb.message.edit("_Fetching stats…_")
         await cb.message.edit(_get_stats(), reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔄 Refresh", callback_data="menu:stats"),
-             InlineKeyboardButton("‹ Back",     callback_data="menu:start")]
+             InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]
         ]))
     elif action == "start":
         await cb.message.edit(WELCOME, reply_markup=main_menu_keyboard())

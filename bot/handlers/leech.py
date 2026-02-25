@@ -82,9 +82,8 @@ async def recv_link(client: Client, msg: Message):
             formats, title = await get_formats(url)
             YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
             await status.edit(
-                f"╔══════════════════════════════╗\n"
-                f"    🎬  **{title[:30]}**\n"
-                f"╚══════════════════════════════╝\n\n"
+                f"🎬✨ **{title[:35]}** ✨🎬\n"
+                f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
                 f"_Choose download quality:_",
                 reply_markup=format_keyboard(formats, job_id),
             )
