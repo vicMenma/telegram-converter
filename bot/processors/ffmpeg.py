@@ -18,7 +18,7 @@ from utils.file_utils import format_size
 from config import (
     TEMP_DIR,
     FFMPEG_VIDEO_CODEC, FFMPEG_AUDIO_CODEC,
-    FFMPEG_PRESET, FFMPEG_CRF,
+    FFMPEG_PRESET, FFMPEG_CRF, FFMPEG_THREADS,
     MAX_DOWNLOAD_SIZE_BYTES,
 )
 
@@ -64,6 +64,89 @@ async def _get_duration(video_path: str) -> float:
         return float(out.decode().strip())
     except Exception:
         return 0.0
+
+
+async def _get_video_info(video_path: str) -> dict:
+    """Get width, height, bitrate, codec of a video."""
+    proc = await asyncio.create_subprocess_exec(
+        _ffprobe(), "-v", "error",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=width,height,codec_name,bit_rate",
+        "-show_entries", "format=bit_rate,size",
+        "-of", "json",
+        video_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, _ = await proc.communicate()
+    try:
+        import json
+        data    = json.loads(out.decode())
+        stream  = data.get("streams", [{}])[0]
+        fmt     = data.get("format", {})
+        width   = int(stream.get("width", 0))
+        height  = int(stream.get("height", 0))
+        codec   = stream.get("codec_name", "")
+        # bitrate in bits/s — prefer stream bitrate, fall back to format
+        bitrate = int(stream.get("bit_rate") or fmt.get("bit_rate") or 0)
+        size    = int(fmt.get("size", 0))
+        return {"width": width, "height": height, "codec": codec,
+                "bitrate": bitrate, "size": size}
+    except Exception:
+        return {"width": 0, "height": 0, "codec": "", "bitrate": 0, "size": 0}
+
+
+async def _normalize_for_burn(video_path: str, job_id: str, progress_cb=None) -> str:
+    """
+    If the video has a very high bitrate or is >1080p, quickly re-encode
+    it to a leaner intermediate before subtitle burning.
+    This is faster overall because the burn step encodes fewer bits.
+
+    Returns original path if normalization not needed, else new path.
+    """
+    ffmpeg = _ffmpeg()
+    info   = await _get_video_info(video_path)
+    width, height, bitrate = info["width"], info["height"], info["bitrate"]
+
+    # Thresholds: above 1080p OR above 8 Mbps → normalize first
+    needs_norm = (height > 1080) or (bitrate > 8_000_000 and bitrate != 0)
+
+    if not needs_norm:
+        return video_path
+
+    # Target: cap at 1080p, 4 Mbps — still great quality, much faster burn
+    target_h   = min(height, 1080)
+    target_w   = -2   # keep aspect ratio
+    norm_path  = os.path.join(TEMP_DIR, f"{job_id}_norm.mp4")
+
+    logger.info(f"Normalizing {width}x{height} {bitrate//1000}kbps → 1080p 4Mbps before burn")
+
+    if progress_cb:
+        await progress_cb(0, "…", "…")
+
+    norm_cmd = [
+        ffmpeg, "-y",
+        "-hwaccel", "auto",
+        "-i", video_path,
+        "-vf", f"scale={target_w}:{target_h}",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "18",             # high quality intermediate
+        "-threads", "0",
+        "-c:a", "copy",
+        norm_path,
+    ]
+
+    proc = await asyncio.create_subprocess_exec(
+        *norm_cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    await proc.communicate()
+
+    if proc.returncode == 0 and os.path.exists(norm_path):
+        return norm_path
+    return video_path   # fallback to original if norm failed
 
 
 # ── FFmpeg runner with progress ────────────────────────────────────
@@ -125,6 +208,64 @@ async def _run_with_progress(cmd: list[str], duration: float, progress_cb=None) 
 
 # ── Subtitle burning ───────────────────────────────────────────────
 
+_ENCODER_CACHE: tuple[str, list] | None = None
+
+def _pick_encoder() -> tuple[str, list]:
+    """
+    Pick the fastest available video encoder — result cached after first call.
+    Priority: h264_nvenc (NVIDIA) > h264_vaapi (Intel/AMD) > libx264 ultrafast
+    Returns (encoder_name, extra_args_list)
+    """
+    global _ENCODER_CACHE
+    if _ENCODER_CACHE is not None:
+        return _ENCODER_CACHE
+    import shutil, subprocess
+    ffmpeg = _ffmpeg()
+
+    # Test NVIDIA NVENC
+    try:
+        r = subprocess.run(
+            [ffmpeg, "-hide_banner", "-f", "lavfi", "-i", "nullsrc",
+             "-t", "0.1", "-c:v", "h264_nvenc", "-f", "null", "-"],
+            capture_output=True, timeout=5
+        )
+        if r.returncode == 0:
+            logger.info("Using NVIDIA NVENC encoder")
+            _ENCODER_CACHE = ("h264_nvenc", ["-preset", "p1", "-tune", "ll", "-rc", "vbr", "-cq", "23"])
+            return _ENCODER_CACHE
+    except Exception:
+        pass
+
+    # Test VAAPI (Intel/AMD on Linux)
+    try:
+        r = subprocess.run(
+            [ffmpeg, "-hide_banner", "-vaapi_device", "/dev/dri/renderD128",
+             "-f", "lavfi", "-i", "nullsrc",
+             "-t", "0.1", "-vf", "format=nv12,hwupload",
+             "-c:v", "h264_vaapi", "-f", "null", "-"],
+            capture_output=True, timeout=5
+        )
+        if r.returncode == 0:
+            logger.info("Using VAAPI hardware encoder")
+            _ENCODER_CACHE = ("h264_vaapi", ["-vaapi_device", "/dev/dri/renderD128",
+                                  "-vf", "format=nv12,hwupload",
+                                  "-qp", "23"])
+            return _ENCODER_CACHE
+    except Exception:
+        pass
+
+    # Fallback: libx264 ultrafast
+    logger.info("Using libx264 ultrafast (software)")
+    _ENCODER_CACHE = ("libx264", [
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-crf", FFMPEG_CRF,
+        "-threads", "0",
+        "-x264-params", "nal-hrd=cbr:force-cfr=1:ref=1:bframes=0:weightp=0:subme=0:me=dia:trellis=0:8x8dct=0:fast-pskip=1",
+    ])
+    return _ENCODER_CACHE
+
+
 async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) -> str:
     """
     Burn subtitles into video.
@@ -146,7 +287,7 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) 
     # SRT is the safest format — no path issues, universally supported
     srt_path = os.path.join(TEMP_DIR, "subtitle_burn.srt")
 
-    if sub_ext == ".srt":
+    if sub_ext in (".srt", ".txt"):  # .txt is plain SRT without the extension
         shutil.copy2(subtitle_path, srt_path)
     else:
         # Convert ASS/VTT/SUB → SRT
@@ -170,19 +311,29 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) 
         "BorderStyle=1,Outline=2,Shadow=1'"
     )
 
-    duration = await _get_duration(video_path)
+    # ── Pre-normalize if high bitrate/resolution ─────────────────
+    # Normalizing to ≤1080p + ≤8Mbps before burning is faster overall
+    # because the subtitle burn step has fewer bits to encode.
+    stem    = Path(video_path).stem
+    norm_path = await _normalize_for_burn(video_path, stem)
+    actual_input = norm_path  # may be same as video_path if no norm needed
+
+    duration = await _get_duration(actual_input)
 
     # Use absolute paths for input/output but cwd trick for subtitle
+    encoder, enc_opts = _pick_encoder()
     full_cmd = [
         ffmpeg, "-progress", "pipe:1", "-nostats",
         "-y",
-        "-i", os.path.abspath(video_path),
+        "-hwaccel", "auto",               # GPU-accelerated decode if available
+        "-i", os.path.abspath(actual_input),
         "-vf", sub_filter,
-        "-c:v", FFMPEG_VIDEO_CODEC,
-        "-preset", FFMPEG_PRESET,
-        "-crf", FFMPEG_CRF,
-        "-c:a", FFMPEG_AUDIO_CODEC,
-        "-b:a", "192k",
+        "-c:v", encoder,
+        *enc_opts,
+        "-pix_fmt", "yuv420p",            # avoid pixel format conversion overhead
+        "-g", "60",                        # keyframe every 60 frames — less overhead
+        "-sc_threshold", "0",             # disable scene change detection
+        "-c:a", "copy",
         "-movflags", "+faststart",
         os.path.abspath(output),
     ]
@@ -239,6 +390,13 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) 
     except Exception:
         pass
 
+    # Cleanup normalized intermediate if created
+    if norm_path != video_path and os.path.exists(norm_path):
+        try:
+            os.remove(norm_path)
+        except Exception:
+            pass
+
     if proc.returncode != 0:
         tail = stderr.decode(errors="replace")[-800:]
         raise RuntimeError(f"FFmpeg subtitle burn failed:\n{tail}")
@@ -263,13 +421,17 @@ async def change_resolution(video_path: str, scale: str, progress_cb=None) -> st
         f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black"
     )
 
+    encoder, enc_opts = _pick_encoder()
     await _run_with_progress([
         ffmpeg, "-y",
+        "-hwaccel", "auto",
         "-i", video_path,
         "-vf", scale_filter,
-        "-c:v", FFMPEG_VIDEO_CODEC,
-        "-preset", FFMPEG_PRESET,
-        "-crf", FFMPEG_CRF,
+        "-c:v", encoder,
+        *enc_opts,
+        "-pix_fmt", "yuv420p",
+        "-g", "60",
+        "-sc_threshold", "0",
         "-c:a", "copy",
         "-movflags", "+faststart",
         output,

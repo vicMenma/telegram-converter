@@ -78,8 +78,7 @@ async def get_formats(url: str) -> list[dict]:
             "skip_download":    True,
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info
+            return ydl.extract_info(url, download=False)
 
     loop = asyncio.get_event_loop()
     info = await loop.run_in_executor(None, _extract)
@@ -142,10 +141,12 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
     last_update     = [0.0]
     final_path      = [None]
 
+    # Capture loop before entering thread executor
+    loop = asyncio.get_event_loop()
+
     def progress_hook(d):
-        nonlocal last_update
         if d["status"] == "finished":
-            final_path[0] = d["filename"]
+            final_path[0] = d.get("filename") or d.get("info_dict", {}).get("filepath")
             return
 
         if d["status"] != "downloading":
@@ -183,18 +184,18 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
                 f"🚀 {speed_str}"
             )
 
-        asyncio.get_event_loop().call_soon_threadsafe(
-            asyncio.ensure_future,
-            _safe_edit(progress_msg, text)
-        )
+        asyncio.run_coroutine_threadsafe(_safe_edit(progress_msg, text), loop)
 
     ydl_opts = {
-        "format":           format_id,
-        "outtmpl":          output_template,
-        "quiet":            True,
-        "no_warnings":      True,
-        "progress_hooks":   [progress_hook],
+        "format":              format_id,
+        "outtmpl":             output_template,
+        "quiet":               True,
+        "no_warnings":         True,
+        "progress_hooks":      [progress_hook],
         "merge_output_format": "mp4",
+        "concurrent_fragment_downloads": 8,   # parallel HLS/DASH fragments
+        "http_chunk_size":     10 * 1024 * 1024,  # 10MB chunks
+        "buffersize":          1024 * 1024,        # 1MB buffer
         "postprocessors": [{
             "key": "FFmpegVideoConvertor",
             "preferedformat": "mp4",
@@ -205,7 +206,6 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-    loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _run)
 
     # Find the downloaded file
@@ -241,10 +241,14 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
     import aiohttp
     import aiofiles
 
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
+    async with aiohttp.ClientSession(
+        connector=connector,
+        headers={"User-Agent": "Mozilla/5.0"},
+    ) as session:
         async with session.get(
             url, allow_redirects=True,
-            timeout=aiohttp.ClientTimeout(total=3600)
+            timeout=aiohttp.ClientTimeout(total=3600, connect=30),
         ) as resp:
             if resp.status != 200:
                 raise RuntimeError(
@@ -275,7 +279,7 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
             last_update = 0.0
 
             async with aiofiles.open(dest, "wb") as fh:
-                async for chunk in resp.content.iter_chunked(256 * 1024):
+                async for chunk in resp.content.iter_chunked(4 * 1024 * 1024):
                     downloaded += len(chunk)
                     if downloaded > MAX_DOWNLOAD_SIZE_BYTES:
                         raise RuntimeError("File exceeded 2 GB limit.")
@@ -317,9 +321,9 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
 
 # ── Magnet / torrent download ──────────────────────────────────────
 
-async def magnet_download(magnet: str, job_id: str, progress_msg=None) -> str:
+async def magnet_download(source: str, job_id: str, progress_msg=None) -> str:
     """
-    Download a magnet link using libtorrent.
+    Download a magnet link OR a .torrent file path using libtorrent.
     Returns path to the downloaded file (largest file in torrent).
     """
     try:
@@ -334,10 +338,18 @@ async def magnet_download(magnet: str, job_id: str, progress_msg=None) -> str:
     dest_dir = os.path.join(TEMP_DIR, f"{job_id}_torrent")
     os.makedirs(dest_dir, exist_ok=True)
 
-    ses    = lt.session()
-    params = lt.parse_magnet_uri(magnet)
-    params.save_path = dest_dir
-    handle = ses.add_torrent(params)
+    ses = lt.session()
+
+    # Accept both magnet URIs and .torrent file paths
+    if source.lower().startswith("magnet:"):
+        params = lt.parse_magnet_uri(source)
+        params.save_path = dest_dir
+        handle = ses.add_torrent(params)
+    else:
+        # .torrent file path
+        info   = lt.torrent_info(source)
+        params = {"ti": info, "save_path": dest_dir}
+        handle = ses.add_torrent(params)
 
     last_update = 0.0
 
