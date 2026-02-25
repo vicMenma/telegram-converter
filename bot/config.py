@@ -28,7 +28,7 @@ MAX_DOWNLOAD_SIZE_BYTES = 2 * 1024 ** 3   # 2 GB
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # ── Supported formats ─────────────────────────────────────────────
-SUBTITLE_EXTENSIONS = {".srt", ".ass", ".ssa", ".vtt", ".sub"}
+SUBTITLE_EXTENSIONS = {".srt", ".ass", ".ssa", ".vtt", ".sub", ".txt"}
 
 VIDEO_EXTENSIONS = {
     ".mp4", ".mkv", ".avi", ".mov", ".webm",
@@ -48,5 +48,9 @@ RESOLUTIONS: dict[str, tuple[str, str]] = {
 # ── FFmpeg quality ────────────────────────────────────────────────
 FFMPEG_VIDEO_CODEC = "libx264"
 FFMPEG_AUDIO_CODEC = "aac"
-FFMPEG_PRESET      = "fast"
+FFMPEG_PRESET      = "ultrafast"  # fastest encoding — good enough for subtitle burn
 FFMPEG_CRF         = "23"
+
+# Use all available CPU cores for encoding
+import multiprocessing
+FFMPEG_THREADS = str(multiprocessing.cpu_count())
