@@ -172,16 +172,15 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
             filled = pct // 5
             bar    = "█" * filled + "░" * (20 - filled)
             text   = (
-                f"📥 **Downloading…**\n\n"
+                f"📥 _Downloading…_ **{pct}%**\n"
                 f"`{bar}`\n"
-                f"**{pct}%** — {format_size(downloaded)} / {format_size(total)}\n"
-                f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                f"📦 {format_size(downloaded)} / {format_size(total)}\n"
+                f"🚀 {speed_str}  ·  ⏱ {eta_str}"
             )
         else:
             text = (
-                f"📥 **Downloading…**\n\n"
-                f"📦 {format_size(downloaded)}\n"
-                f"🚀 {speed_str}"
+                f"📥 _Downloading…_\n"
+                f"📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
             )
 
         asyncio.run_coroutine_threadsafe(_safe_edit(progress_msg, text), loop)
@@ -308,13 +307,13 @@ async def _aria2c_download(url: str, dest: str, progress_msg=None, total: int = 
                     eta    = int(remain / speed) if speed > 0 else 0
                     eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
                     text   = (
-                        f"🌐 **Downloading file…**\n\n"
+                        f"🌐 _Downloading…_ **{pct}%**\n"
                         f"`{bar}`\n"
-                        f"**{pct}%** — {format_size(downloaded)} / {format_size(total)}\n"
-                        f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                        f"📦 {format_size(downloaded)} / {format_size(total)}\n"
+                        f"🚀 {speed_str}  ·  ⏱ {eta_str}"
                     )
                 else:
-                    text = f"🌐 **Downloading file…**\n\n📦 {format_size(downloaded)}\n🚀 {speed_str}"
+                    text = f"🌐 _Downloading…_\n📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
                 try:
                     await progress_msg.edit(text)
                 except Exception:
@@ -468,10 +467,10 @@ async def magnet_download(source: str, job_id: str, progress_msg=None) -> str:
             state_str = state_map.get(s.state, "⏳ Working")
 
             text = (
-                f"🧲 **Magnet Download**\n\n"
-                f"`{bar}` **{pct}%**\n"
-                f"{state_str}\n"
-                f"🚀 {speed_str} · 👥 {peers} peers"
+                f"🧲 _Downloading…_ **{pct}%**\n"
+                f"`{bar}`\n"
+                f"{state_str}  ·  👥 {peers} peers\n"
+                f"🚀 {speed_str}"
             )
             try:
                 await progress_msg.edit(text)

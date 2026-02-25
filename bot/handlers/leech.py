@@ -15,6 +15,7 @@ Flow:
 
 import os
 import uuid
+from utils.settings import get as user_setting
 import logging
 from pathlib import Path
 
@@ -77,7 +78,7 @@ async def recv_link(client: Client, msg: Message):
     username = msg.from_user.username or msg.from_user.first_name or str(uid)
 
     if link_type == "ytdlp":
-        status = await msg.reply("_Fetching available qualities…_")
+        status = await msg.reply("🔍 _Fetching available qualities…_")
         try:
             formats, title = await get_formats(url)
             YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
@@ -92,11 +93,11 @@ async def recv_link(client: Client, msg: Message):
             await status.edit(
                 f"❌ **Could not fetch video info**\n\n"
                 f"`{str(e)[:200]}`\n\n"
-                f"_Try sending the direct video URL instead._"
+                f"> _Try sending the direct video URL instead_"
             )
 
     elif link_type == "direct":
-        status = await msg.reply("_Starting download…_")
+        status = await msg.reply("📥 _Starting download…_")
         register(job_id, uid, username, "direct", url[:60])
         update_status(job_id, "🌐 Downloading…")
         await _run_direct(client, msg, status, url, job_id)
@@ -118,7 +119,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
     if parts[1] == "cancel":
         uid = cb.from_user.id
         YTDLP_STATE.pop(uid, None)
-        await cb.message.edit("_Download cancelled._")
+        await cb.message.edit("✕ _Cancelled._")
         await cb.answer()
         return
 
@@ -128,7 +129,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
     data   = YTDLP_STATE.pop(uid, None)
 
     if not data or data["job_id"] != job_id:
-        await cb.answer("⚠️ Session expired. Send the link again.", show_alert=True)
+        await cb.answer("⏰ Session expired — please send the link again.", show_alert=True)
         return
 
     await cb.answer()
@@ -138,7 +139,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
     label     = fmt["label"]
 
     progress_msg = await cb.message.edit(
-        f"📥 **Downloading {label}…**\n\n`░░░░░░░░░░░░░░░░░░░░` 0%"
+        f"📥 **Downloading** `{label}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`░░░░░░░░░░░░░░░░░░░░` 0%"
     )
 
     username = cb.from_user.username or cb.from_user.first_name or str(uid)
@@ -152,7 +153,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
         await _upload_file(client, cb.message, progress_msg, path)
     except Exception as e:
         logger.error(f"yt-dlp download failed: {e}", exc_info=True)
-        await progress_msg.edit(f"❌ **Download failed**\n\n`{str(e)[:300]}`")
+        await progress_msg.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
     finally:
         finish(job_id)
         cleanup(path)
@@ -166,7 +167,7 @@ async def _run_direct(client, msg, status, url, job_id):
         await _upload_file(client, msg, status, path)
     except Exception as e:
         logger.error(f"Direct download failed: {e}", exc_info=True)
-        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:300]}`")
+        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
     finally:
         finish(job_id)
         cleanup(path)
@@ -180,7 +181,7 @@ async def _run_magnet(client, msg, status, magnet, job_id):
         await _upload_file(client, msg, status, path)
     except Exception as e:
         logger.error(f"Magnet download failed: {e}", exc_info=True)
-        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:300]}`")
+        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
     finally:
         finish(job_id)
         cleanup(path)
@@ -203,8 +204,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     VIDEO_EXTS = {".mp4", ".m4v"}  # only these render nicely as Telegram videos
 
     await progress_msg.edit(
-        f"📤 **Uploading…**\n\n`░░░░░░░░░░░░░░░░░░░░` 0%\n"
-        f"📦 {format_size(size)}"
+        f"📤 _Uploading…_ `0%`\n`░░░░░░░░░░░░░░░░░░░░`\n📦 {format_size(size)}"
     )
 
     import time as _time
@@ -228,13 +228,13 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
             eta     = int(remain / speed) if speed > 0 else 0
             eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
             text    = (
-                f"📤 **Uploading…**\n\n"
+                f"📤 _Uploading…_ **{pct}%**\n"
                 f"`{bar}`\n"
-                f"**{pct}%** — {format_size(current)} / {format_size(real_total)}\n"
-                f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                f"📦 {format_size(current)} / {format_size(real_total)}\n"
+                f"🚀 {speed_str}  ·  ⏱ {eta_str}"
             )
         else:
-            text = f"📤 **Uploading…**\n\n📦 {format_size(current)}\n🚀 {speed_str}"
+            text = f"📤 _Uploading…_\n📦 {format_size(current)}  ·  🚀 {speed_str}"
         try:
             await progress_msg.edit(text)
         except Exception:
@@ -242,7 +242,9 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
 
     caption = f"✅ Done"
 
-    if ext in VIDEO_EXTS:
+    upload_type = user_setting(msg.chat.id, "upload_type")
+
+    if ext in VIDEO_EXTS and upload_type == "video":
         thumb = await _make_thumb(file_path)
         duration = await _get_duration(file_path)
         width, height = await _get_dimensions(file_path)
@@ -272,23 +274,34 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     await progress_msg.delete()
 
     # ── Ask to forward to channel ─────────────────────────────────
-    import os as _os
-    if _os.getenv("FORWARD_CHANNEL_ID", "").strip():
+    _channel = user_setting(msg.chat.id, "channel_id")
+    if _channel:
         from handlers.workflow import FORWARD_PENDING, _forward_keyboard
-        FORWARD_PENDING[sent.id] = {
-            "chat_id":    sent.chat.id,
-            "message_id": sent.id,
-        }
-        await client.send_message(
-            chat_id=msg.chat.id,
-            text=(
-                "╔══════════════════════════════╗\n"
-                "    📢  **FORWARD TO CHANNEL**\n"
-                "╚══════════════════════════════╝\n\n"
-                "_Would you like to forward this file to your channel?_"
-            ),
-            reply_markup=_forward_keyboard(sent.id),
-        )
+        _auto_fwd = user_setting(msg.chat.id, "auto_forward")
+        if _auto_fwd:
+            try:
+                await client.copy_message(
+                    chat_id=_channel,
+                    from_chat_id=sent.chat.id,
+                    message_id=sent.id,
+                )
+            except Exception as e:
+                logger.error(f"Auto-forward failed: {e}")
+        else:
+            FORWARD_PENDING[sent.id] = {
+                "chat_id":    sent.chat.id,
+                "message_id": sent.id,
+                "channel_id": _channel,
+            }
+            await client.send_message(
+                chat_id=msg.chat.id,
+                text=(
+                    "📢✨ **FORWARD TO CHANNEL?** ✨📢\n"
+                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                    "_Would you like to send this file to your channel?_"
+                ),
+                reply_markup=_forward_keyboard(sent.id),
+            )
 
 
 async def _get_dimensions(video_path: str) -> tuple[int, int]:

@@ -108,18 +108,21 @@ async def _normalize_for_burn(video_path: str, job_id: str, progress_cb=None) ->
     info   = await _get_video_info(video_path)
     width, height, bitrate = info["width"], info["height"], info["bitrate"]
 
-    # Thresholds: above 1080p OR above 8 Mbps → normalize first
-    needs_norm = (height > 1080) or (bitrate > 8_000_000 and bitrate != 0)
+    codec  = info["codec"]
+
+    # Normalize if: >1080p, >5Mbps, or HEVC/AV1 codec (expensive to decode+encode)
+    is_heavy_codec = codec in ("hevc", "h265", "av1", "vp9")
+    needs_norm = (height > 1080) or (bitrate > 5_000_000 and bitrate != 0) or is_heavy_codec
 
     if not needs_norm:
         return video_path
 
-    # Target: cap at 1080p, 4 Mbps — still great quality, much faster burn
-    target_h   = min(height, 1080)
+    # Target: 720p max, CRF 28 — good enough for subtitle preview, much faster burn
+    target_h   = min(height, 720)
     target_w   = -2   # keep aspect ratio
     norm_path  = os.path.join(TEMP_DIR, f"{job_id}_norm.mp4")
 
-    logger.info(f"Normalizing {width}x{height} {bitrate//1000}kbps → 1080p 4Mbps before burn")
+    logger.info(f"Normalizing {codec} {width}x{height} {bitrate//1000}kbps → 720p CRF28 before burn")
 
     if progress_cb:
         await progress_cb(0, "…", "…")
@@ -131,7 +134,7 @@ async def _normalize_for_burn(video_path: str, job_id: str, progress_cb=None) ->
         "-vf", f"scale={target_w}:{target_h}",
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "18",             # high quality intermediate
+        "-crf", "28",             # lower quality but much faster burn
         "-threads", "0",
         "-c:a", "copy",
         norm_path,
@@ -210,15 +213,19 @@ async def _run_with_progress(cmd: list[str], duration: float, progress_cb=None) 
 
 _ENCODER_CACHE: tuple[str, list] | None = None
 
-def _pick_encoder() -> tuple[str, list]:
+def _pick_encoder(preset: str = None, crf: int = None) -> tuple[str, list]:
     """
-    Pick the fastest available video encoder — result cached after first call.
-    Priority: h264_nvenc (NVIDIA) > h264_vaapi (Intel/AMD) > libx264 ultrafast
+    Pick the fastest available video encoder.
+    Priority: h264_nvenc (NVIDIA) > h264_vaapi (Intel/AMD) > libx264
     Returns (encoder_name, extra_args_list)
+    preset/crf override user settings when provided.
     """
     global _ENCODER_CACHE
-    if _ENCODER_CACHE is not None:
+    # Only use cache when no overrides
+    if preset is None and crf is None and _ENCODER_CACHE is not None:
         return _ENCODER_CACHE
+    _preset = preset or FFMPEG_PRESET
+    _crf    = str(crf) if crf is not None else FFMPEG_CRF
     import shutil, subprocess
     ffmpeg = _ffmpeg()
 
@@ -254,19 +261,21 @@ def _pick_encoder() -> tuple[str, list]:
     except Exception:
         pass
 
-    # Fallback: libx264 ultrafast
-    logger.info("Using libx264 ultrafast (software)")
-    _ENCODER_CACHE = ("libx264", [
-        "-preset", "ultrafast",
+    # Fallback: libx264
+    logger.info(f"Using libx264 {_preset} CRF={_crf} (software)")
+    result = ("libx264", [
+        "-preset", _preset,
         "-tune", "zerolatency",
-        "-crf", FFMPEG_CRF,
+        "-crf", _crf,
         "-threads", "0",
         "-x264-params", "nal-hrd=cbr:force-cfr=1:ref=1:bframes=0:weightp=0:subme=0:me=dia:trellis=0:8x8dct=0:fast-pskip=1",
     ])
-    return _ENCODER_CACHE
+    if preset is None and crf is None:
+        _ENCODER_CACHE = result
+    return result
 
 
-async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) -> str:
+async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None, uid: int = 0) -> str:
     """
     Burn subtitles into video.
 
@@ -321,7 +330,15 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) 
     duration = await _get_duration(actual_input)
 
     # Use absolute paths for input/output but cwd trick for subtitle
-    encoder, enc_opts = _pick_encoder()
+    _user_preset = _user_crf = None
+    if uid:
+        try:
+            from utils.settings import get as _uget
+            _user_preset = _uget(uid, "preset")
+            _user_crf    = _uget(uid, "crf")
+        except Exception:
+            pass
+    encoder, enc_opts = _pick_encoder(preset=_user_preset, crf=_user_crf)
     full_cmd = [
         ffmpeg, "-progress", "pipe:1", "-nostats",
         "-y",
@@ -409,7 +426,7 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None) 
 
 # ── Resolution conversion ──────────────────────────────────────────
 
-async def change_resolution(video_path: str, scale: str, progress_cb=None) -> str:
+async def change_resolution(video_path: str, scale: str, progress_cb=None, uid: int = 0) -> str:
     ffmpeg   = _ffmpeg()
     w, h     = scale.split(":")
     stem     = Path(video_path).stem

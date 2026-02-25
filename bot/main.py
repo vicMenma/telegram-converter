@@ -15,6 +15,7 @@ logging.basicConfig(
 import handlers.start
 import handlers.workflow
 import handlers.leech
+import handlers.settings
 
 
 async def main():

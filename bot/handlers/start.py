@@ -34,6 +34,9 @@ def main_menu_keyboard():
             InlineKeyboardButton("📖  How to Use",        callback_data="menu:help"),
             InlineKeyboardButton("📡  Server Stats",      callback_data="menu:stats"),
         ],
+        [
+            InlineKeyboardButton("⚙️  Settings",          callback_data="menu:settings"),
+        ],
     ])
 
 
@@ -341,5 +344,10 @@ async def menu_callbacks(client: Client, cb: CallbackQuery):
             [InlineKeyboardButton("🔄 Refresh", callback_data="menu:stats"),
              InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]
         ]))
+    elif action == "settings":
+        from utils.settings import get_all as _get_all
+        from handlers.settings import _settings_text, _settings_keyboard
+        uid = cb.from_user.id
+        await cb.message.reply(_settings_text(uid), reply_markup=_settings_keyboard(uid))
     elif action == "start":
         await cb.message.edit(WELCOME, reply_markup=main_menu_keyboard())
