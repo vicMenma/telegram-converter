@@ -203,6 +203,7 @@ async def recv_file(client: Client, msg: Message):
         await msg.reply(f"❌ File too large — max 2 GB.\nYour file: <b>{format_size(file_size)}</b>")
         return
 
+    STATE.pop(uid, None)  # clear any previous session
     await _video_accepted(msg, "upload",
                           file_id=media.file_id,
                           file_name=file_name,
@@ -262,6 +263,7 @@ async def recv_text(client: Client, msg: Message):
 
     # Magnet link
     if text.lower().startswith("magnet:"):
+        STATE.pop(uid, None)  # clear any old session
         await _video_accepted(msg, "magnet", url=text, file_name="torrent")
         return
 
@@ -274,9 +276,24 @@ async def recv_text(client: Client, msg: Message):
         return
 
     url = match.group(0)
-    if ".m3u8" in url.lower():
+    STATE.pop(uid, None)  # always clear old session before accepting new link
+
+    # Use detect_link_type so YouTube/yt-dlp links are routed correctly
+    link_type = detect_link_type(url)
+
+    if link_type == "blocked":
+        await msg.reply(
+            "🔒 <b>This link requires authentication</b>\n\n"
+            f"<code>{url[:80]}</code>\n\n"
+            "<i>This service requires login. Download the file first, then send it to the bot.</i>"
+        )
+        return
+    elif link_type == "ytdlp":
         await _video_accepted(msg, "ytdlp", url=url, file_name="stream.mp4")
+    elif link_type == "magnet":
+        await _video_accepted(msg, "magnet", url=url, file_name="torrent")
     else:
+        # direct link
         await _video_accepted(msg, "url", url=url,
                               file_name=Path(url.split("?")[0]).name or "video.mp4")
 
@@ -533,8 +550,7 @@ async def _send_output(client: Client, msg: Message, progress_msg,
     )
 
     upload_type = user_setting(msg.chat.id, "upload_type")
-    user        = get_user_client()
-    uploader    = user if user and user.is_connected else client
+    uploader    = client  # always use bot client — sends to user's chat, not Saved Messages
     thumb       = thumb_path if thumb_ok else None
 
     if upload_type == "document":

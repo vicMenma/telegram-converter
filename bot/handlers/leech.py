@@ -63,62 +63,7 @@ def format_keyboard(formats: list[dict], job_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
-# ── Main link receiver ─────────────────────────────────────────────
-@app.on_message(filters.private & filters.regex(r"(https?://|magnet:\?)"))
-async def recv_link(client: Client, msg: Message):
-    """Catch any message containing a URL or magnet link."""
-    text = msg.text or msg.caption or ""
-    url  = text.strip().split()[0]   # take first token
-
-    uid    = msg.from_user.id
-    job_id = str(uuid.uuid4())[:8]
-
-    # ── Route by type ──────────────────────────────────────────────
-    link_type = detect_link_type(url)
-
-    username = msg.from_user.username or msg.from_user.first_name or str(uid)
-
-    if link_type == "ytdlp":
-        status = await msg.reply("🔍 <i>Fetching available qualities…</i>")
-        try:
-            formats, title = await get_formats(url)
-            YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
-            await status.edit(
-                f"🎬✨ <b>{title[:35]}</b> ✨🎬\n"
-                f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-                f"<i>Choose download quality:</i>",
-                reply_markup=format_keyboard(formats, job_id),
-            )
-        except Exception as e:
-            logger.error(f"get_formats failed: {e}", exc_info=True)
-            await status.edit(
-                f"❌ <b>Could not fetch video info</b>\n\n"
-                f"<code>{str(e)[:200]}</code>\n\n"
-                f"> <i>Try sending the direct video URL instead</i>"
-            )
-
-    elif link_type == "blocked":
-        await msg.reply(
-            "🔒 <b>This link requires authentication</b>\n\n"
-            f"<code>{url[:80]}</code>\n\n"
-            "> This service (e.g. Seedr, Real-Debrid) requires login.\n"
-            "> The bot cannot access protected links.\n\n"
-            "<i>Download the file first, then send it directly to the bot.</i>"
-        )
-
-    elif link_type == "direct":
-        status = await msg.reply("📥 <i>Starting download…</i>")
-        register(job_id, uid, username, "direct", url[:60])
-        update_status(job_id, "🌐 Downloading…")
-        await _run_direct(client, msg, status, url, job_id)
-
-    elif link_type == "magnet":
-        status = await msg.reply(
-            "🧲 <i>Connecting to peers…</i>"
-        )
-        register(job_id, uid, username, "magnet", url[:60])
-        update_status(job_id, "🧲 Connecting to peers…")
-        await _run_magnet(client, msg, status, url, job_id)
+# Links are handled by workflow.py recv_text → shows operation keyboard first
 
 
 # ── yt-dlp resolution chosen ──────────────────────────────────────
@@ -253,8 +198,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     caption = f"✅ Done"
 
     upload_type = user_setting(msg.chat.id, "upload_type")
-    user        = get_user_client()
-    uploader    = user if user and user.is_connected else client
+    uploader    = client  # always use bot client — sends to user's chat, not Saved Messages
 
     if ext in VIDEO_EXTS and upload_type == "video":
         thumb = await _make_thumb(file_path)
