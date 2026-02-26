@@ -110,9 +110,10 @@ async def _normalize_for_burn(video_path: str, job_id: str, progress_cb=None) ->
 
     codec  = info["codec"]
 
-    # Normalize if: >1080p, >5Mbps, or HEVC/AV1 codec (expensive to decode+encode)
+    # Normalize if: >1080p, >8Mbps, or HEVC/AV1 codec (expensive to decode+encode)
+    # Raised threshold: h264 ≤8Mbps encodes fast enough without pre-normalize
     is_heavy_codec = codec in ("hevc", "h265", "av1", "vp9")
-    needs_norm = (height > 1080) or (bitrate > 5_000_000 and bitrate != 0) or is_heavy_codec
+    needs_norm = (height > 1080) or (bitrate > 8_000_000 and bitrate != 0) or is_heavy_codec
 
     if not needs_norm:
         return video_path
@@ -127,15 +128,19 @@ async def _normalize_for_burn(video_path: str, job_id: str, progress_cb=None) ->
     if progress_cb:
         await progress_cb(0, "…", "…")
 
+    import multiprocessing as _mp
+    _nt = str(_mp.cpu_count())
     norm_cmd = [
         ffmpeg, "-y",
         "-hwaccel", "auto",
         "-i", video_path,
         "-vf", f"scale={target_w}:{target_h}",
         "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "28",             # lower quality but much faster burn
-        "-threads", "0",
+        "-preset", "ultrafast",   # always ultrafast for intermediate — just reducing size
+        "-crf", "28",
+        "-threads", _nt,
+        "-thread_type", "slice+frame",
+        "-x264-params", "ref=1:bframes=0:subme=0:me=dia:trellis=0:8x8dct=0:fast-pskip=1:mbtree=0:rc-lookahead=0",
         "-c:a", "copy",
         norm_path,
     ]
@@ -263,12 +268,18 @@ def _pick_encoder(preset: str = None, crf: int = None) -> tuple[str, list]:
 
     # Fallback: libx264
     logger.info(f"Using libx264 {_preset} CRF={_crf} (software)")
+    import multiprocessing
+    _threads = str(multiprocessing.cpu_count())
     result = ("libx264", [
         "-preset", _preset,
         "-tune", "zerolatency",
         "-crf", _crf,
-        "-threads", "0",
-        "-x264-params", "nal-hrd=cbr:force-cfr=1:ref=1:bframes=0:weightp=0:subme=0:me=dia:trellis=0:8x8dct=0:fast-pskip=1",
+        "-threads", _threads,
+        "-thread_type", "slice+frame",
+        "-x264-params",
+        "ref=1:bframes=0:weightp=0:subme=0:me=dia:trellis=0:"
+        "8x8dct=0:fast-pskip=1:aq-mode=0:mixed-refs=0:"
+        "rc-lookahead=0:mbtree=0:sync-lookahead=0:sliced-threads=1",
     ])
     if preset is None and crf is None:
         _ENCODER_CACHE = result
@@ -342,14 +353,16 @@ async def burn_subtitles(video_path: str, subtitle_path: str, progress_cb=None, 
     full_cmd = [
         ffmpeg, "-progress", "pipe:1", "-nostats",
         "-y",
-        "-hwaccel", "auto",               # GPU-accelerated decode if available
+        "-probesize", "50M",              # faster input probing
+        "-analyzeduration", "10M",
+        "-hwaccel", "auto",
         "-i", os.path.abspath(actual_input),
         "-vf", sub_filter,
         "-c:v", encoder,
         *enc_opts,
-        "-pix_fmt", "yuv420p",            # avoid pixel format conversion overhead
-        "-g", "60",                        # keyframe every 60 frames — less overhead
-        "-sc_threshold", "0",             # disable scene change detection
+        "-pix_fmt", "yuv420p",
+        "-g", "60",
+        "-sc_threshold", "0",
         "-c:a", "copy",
         "-movflags", "+faststart",
         os.path.abspath(output),
@@ -433,14 +446,32 @@ async def change_resolution(video_path: str, scale: str, progress_cb=None, uid: 
     output   = os.path.join(TEMP_DIR, f"{stem}_{w}x{h}.mp4")
     duration = await _get_duration(video_path)
 
+    # Check if already at target resolution — just remux, no re-encode
+    info = await _get_video_info(video_path)
+    if str(info["width"]) == w and str(info["height"]) == h and info["codec"] == "h264":
+        logger.info("Already at target resolution, remuxing only")
+        import shutil
+        shutil.copy2(video_path, output)
+        return output
+
     scale_filter = (
         f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
         f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:black"
     )
 
-    encoder, enc_opts = _pick_encoder()
+    _user_preset2 = _user_crf2 = None
+    if uid:
+        try:
+            from utils.settings import get as _uget2
+            _user_preset2 = _uget2(uid, "preset")
+            _user_crf2    = _uget2(uid, "crf")
+        except Exception:
+            pass
+    encoder, enc_opts = _pick_encoder(preset=_user_preset2, crf=_user_crf2)
     await _run_with_progress([
         ffmpeg, "-y",
+        "-probesize", "50M",
+        "-analyzeduration", "10M",
         "-hwaccel", "auto",
         "-i", video_path,
         "-vf", scale_filter,
@@ -694,8 +725,13 @@ async def compress_to_size(
     logger.info(f"Compress: duration={duration:.1f}s target={target_mb}MB "
                 f"video_bitrate={video_bitrate//1000}kbps")
 
+    import multiprocessing as _mp2
+    _ct = str(_mp2.cpu_count())
     cmd = [
         ffmpeg, "-y",
+        "-probesize", "50M",
+        "-analyzeduration", "10M",
+        "-hwaccel", "auto",
         "-progress", "pipe:1", "-nostats",
         "-i", video_path,
         "-c:v", "libx264",
@@ -703,6 +739,9 @@ async def compress_to_size(
         "-b:v", str(video_bitrate),
         "-maxrate", str(int(video_bitrate * 1.5)),
         "-bufsize", str(video_bitrate * 2),
+        "-threads", _ct,
+        "-thread_type", "slice+frame",
+        "-x264-params", "ref=1:bframes=0:subme=0:me=dia:trellis=0:8x8dct=0:fast-pskip=1:mbtree=0:rc-lookahead=0",
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
