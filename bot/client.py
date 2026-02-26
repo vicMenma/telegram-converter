@@ -11,7 +11,7 @@ app = Client(
     api_id=API_ID,
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
-    workers=16,
-    max_concurrent_transmissions=10,
+    workers=32,                        # more async workers for concurrent ops
+    max_concurrent_transmissions=20,   # more parallel upload/download streams
     parse_mode=enums.ParseMode.HTML,
 )

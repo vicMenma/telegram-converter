@@ -347,65 +347,85 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
         await _aria2c_download(url, dest, progress_msg=progress_msg, total=total)
         return dest
 
-    # Fallback: aiohttp parallel chunks
-    logger.info("Using aiohttp for direct download")
-    connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
-    async with aiohttp.ClientSession(
-        connector=connector,
-        headers={"User-Agent": "Mozilla/5.0"},
-    ) as session:
+    # Parallel chunk download — splits file into N chunks downloaded simultaneously
+    logger.info(f"Using parallel aiohttp for direct download ({total // 1024**2} MB)")
+    CHUNK_COUNT   = 16           # parallel connections
+    CHUNK_SIZE    = max(total // CHUNK_COUNT, 4 * 1024 * 1024) if total > 0 else 8 * 1024 * 1024
+
+    connector  = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, force_close=False)
+    headers    = {"User-Agent": "Mozilla/5.0"}
+    downloaded = 0
+    start_time = time.time()
+    last_update = [0.0]
+
+    async def _update_progress():
+        now = time.time()
+        if not progress_msg or now - last_update[0] < 3:
+            return
+        last_update[0] = now
+        elapsed   = max(now - start_time, 0.1)
+        speed     = downloaded / elapsed
+        speed_str = f"{format_size(int(speed))}/s"
+        if total > 0:
+            pct     = min(int(downloaded * 100 / total), 99)
+            filled  = pct // 5
+            bar     = "█" * filled + "░" * (20 - filled)
+            remain  = total - downloaded
+            eta     = int(remain / speed) if speed > 0 else 0
+            eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
+            text    = (
+                f"🌐 <i>Downloading…</i> <b>{pct}%</b>\n"
+                f"<code>{bar}</code>\n"
+                f"📦 {format_size(downloaded)} / {format_size(total)}\n"
+                f"🚀 {speed_str}  ·  ⏱ {eta_str}"
+            )
+        else:
+            text = f"🌐 <i>Downloading…</i>\n📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
+        try:
+            await progress_msg.edit(text)
+        except Exception:
+            pass
+
+    # Pre-allocate file
+    async with aiofiles.open(dest, "wb") as fh:
+        if total > 0:
+            await fh.seek(total - 1)
+            await fh.write(b"\0")
+
+    async def _download_chunk(session, start: int, end: int):
+        nonlocal downloaded
+        chunk_headers = dict(headers)
+        if total > 0:
+            chunk_headers["Range"] = f"bytes={start}-{end}"
         async with session.get(
-            url, allow_redirects=True,
+            url,
+            headers=chunk_headers,
+            allow_redirects=True,
             timeout=aiohttp.ClientTimeout(total=3600, connect=30),
         ) as resp:
-            if resp.status != 200:
-                raise RuntimeError(
-                    f"Server returned HTTP {resp.status}.\n"
-                    "Make sure the URL is a direct download link."
-                )
+            if resp.status not in (200, 206):
+                raise RuntimeError(f"Server returned HTTP {resp.status}")
+            async with aiofiles.open(dest, "r+b") as fh:
+                await fh.seek(start)
+                async for data in resp.content.iter_chunked(1024 * 1024):
+                    await fh.write(data)
+                    downloaded += len(data)
+                    await _update_progress()
 
-            downloaded = 0
-            start_time = time.time()
-            last_update = 0.0
+    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
+        if total > 0:
+            # Split into chunks and download in parallel
+            ranges  = [(i * CHUNK_SIZE, min((i + 1) * CHUNK_SIZE - 1, total - 1))
+                       for i in range((total + CHUNK_SIZE - 1) // CHUNK_SIZE)]
+            tasks   = [_download_chunk(session, s, e) for s, e in ranges]
+            # Run in batches of CHUNK_COUNT to avoid overwhelming
+            for i in range(0, len(tasks), CHUNK_COUNT):
+                await asyncio.gather(*tasks[i:i + CHUNK_COUNT])
+        else:
+            # Unknown size — single stream
+            await _download_chunk(session, 0, 0)
 
-            async with aiofiles.open(dest, "wb") as fh:
-                async for chunk in resp.content.iter_chunked(4 * 1024 * 1024):
-                    downloaded += len(chunk)
-                    if downloaded > MAX_DOWNLOAD_SIZE_BYTES:
-                        raise RuntimeError("File exceeded 2 GB limit.")
-                    await fh.write(chunk)
-
-                    now = time.time()
-                    if progress_msg and (now - last_update) >= 3:
-                        last_update = now
-                        elapsed    = max(now - start_time, 0.1)
-                        speed      = downloaded / elapsed
-                        speed_str  = f"{format_size(int(speed))}/s"
-
-                        if total > 0:
-                            pct     = min(int(downloaded * 100 / total), 99)
-                            filled  = pct // 5
-                            bar     = "█" * filled + "░" * (20 - filled)
-                            remain  = total - downloaded
-                            eta     = int(remain / speed) if speed > 0 else 0
-                            eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
-                            text    = (
-                                f"🌐 <i>Downloading…</i> <b>{pct}%</b>\n"
-                                f"<code>{bar}</code>\n"
-                                f"📦 {format_size(downloaded)} / {format_size(total)}\n"
-                                f"🚀 {speed_str}  ·  ⏱ {eta_str}"
-                            )
-                        else:
-                            text = (
-                                f"🌐 <i>Downloading…</i>\n"
-                                f"📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
-                            )
-                        try:
-                            await progress_msg.edit(text)
-                        except Exception:
-                            pass
-
-            return dest
+    return dest
 
 
 # ── Magnet / torrent download ──────────────────────────────────────
@@ -428,6 +448,35 @@ async def magnet_download(source: str, job_id: str, progress_msg=None) -> str:
     os.makedirs(dest_dir, exist_ok=True)
 
     ses = lt.session()
+
+    # Aggressive performance settings
+    settings = {
+        "active_downloads":              10,
+        "active_seeds":                  5,
+        "active_limit":                  15,
+        "num_want":                      200,      # request more peers
+        "connections_limit":             500,
+        "upload_rate_limit":             0,        # unlimited upload
+        "download_rate_limit":           0,        # unlimited download
+        "unchoke_slots_limit":           8,
+        "connection_speed":              500,      # connect to peers faster
+        "peer_connect_timeout":          3,
+        "request_timeout":               10,
+        "max_out_request_queue":         1500,
+        "whole_pieces_threshold":        20,
+        "send_buffer_watermark":         3 * 1024 * 1024,
+        "send_buffer_low_watermark":     512 * 1024,
+        "recv_socket_buffer_size":       1024 * 1024,
+        "send_socket_buffer_size":       1024 * 1024,
+        "max_peer_recv_buffer_size":     5 * 1024 * 1024,
+        "enable_dht":                    True,
+        "enable_lsd":                    True,
+        "enable_upnp":                   True,
+        "enable_natpmp":                 True,
+        "announce_to_all_tiers":         True,
+        "announce_to_all_trackers":      True,
+    }
+    ses.apply_settings(settings)
 
     # Accept both magnet URIs and .torrent file paths
     if source.lower().startswith("magnet:"):

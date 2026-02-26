@@ -739,12 +739,16 @@ async def _send_output(client: Client, msg: Message, progress_msg,
         f"📤 <i>Uploading…</i> <code>0%</code>\n<code>░░░░░░░░░░░░░░░░░░░░</code>\n📦 {format_size(out_size)}"
     )
 
-    # Respect user's upload type preference
-    upload_type = user_setting(msg.chat.id, "upload_type")
+    # Use user session for upload if available — significantly faster
+    upload_type  = user_setting(msg.chat.id, "upload_type")
+    user         = get_user_client()
+    uploader     = user if user and user.is_connected else client
+    # Always send to the user's chat ID (bot handles the chat, user session just uploads)
+    chat_id      = msg.chat.id
 
     if upload_type == "document":
-        sent = await client.send_document(
-            chat_id=msg.chat.id,
+        sent = await uploader.send_document(
+            chat_id=chat_id,
             document=output_path,
             thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
             caption="✅ Done",
@@ -752,8 +756,8 @@ async def _send_output(client: Client, msg: Message, progress_msg,
             progress=upload_progress,
         )
     else:
-        sent = await client.send_video(
-            chat_id=msg.chat.id,
+        sent = await uploader.send_video(
+            chat_id=chat_id,
             video=output_path,
             thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None,
             duration=duration,

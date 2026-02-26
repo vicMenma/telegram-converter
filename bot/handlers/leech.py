@@ -16,6 +16,7 @@ Flow:
 import os
 import uuid
 from utils.settings import get as user_setting
+from user_client import get_user_client
 import logging
 from pathlib import Path
 
@@ -243,12 +244,14 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     caption = f"✅ Done"
 
     upload_type = user_setting(msg.chat.id, "upload_type")
+    user        = get_user_client()
+    uploader    = user if user and user.is_connected else client
 
     if ext in VIDEO_EXTS and upload_type == "video":
         thumb = await _make_thumb(file_path)
         duration = await _get_duration(file_path)
         width, height = await _get_dimensions(file_path)
-        sent = await client.send_video(
+        sent = await uploader.send_video(
             chat_id=msg.chat.id,
             video=file_path,
             thumb=thumb,
@@ -263,7 +266,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
         if thumb and os.path.exists(thumb):
             os.remove(thumb)
     else:
-        sent = await client.send_document(
+        sent = await uploader.send_document(
             chat_id=msg.chat.id,
             document=file_path,
             caption=caption,

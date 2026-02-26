@@ -1,7 +1,5 @@
 """
 User account client for fast uploads/downloads.
-Uses pyrofork for optimized MTProto speed.
-Session string stored in USER_SESSION env var.
 """
 
 from pyrogram import Client, enums
@@ -25,8 +23,8 @@ def get_user_client() -> Client | None:
         api_id=API_ID,
         api_hash=API_HASH,
         session_string=session_string,
-        workers=8,
-        max_concurrent_transmissions=10,
-        parse_mode=enums.ParseMode.MARKDOWN,
+        workers=32,
+        max_concurrent_transmissions=20,
+        parse_mode=enums.ParseMode.HTML,
     )
     return _user_app
