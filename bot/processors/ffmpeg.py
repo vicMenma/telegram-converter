@@ -666,8 +666,9 @@ async def compress_to_size(
     uid: int = 0,
 ) -> str:
     """
-    Two-pass compress to target file size in MB.
-    Uses 2-pass encoding for accurate bitrate targeting.
+    Compress video to approximately target_mb using ABR single-pass.
+    Calculates the required video bitrate from duration and target size,
+    then encodes with libx264 ABR — reliable on all platforms.
     """
     ffmpeg = _ffmpeg()
     stem   = Path(video_path).stem
@@ -677,66 +678,38 @@ async def compress_to_size(
     if duration <= 0:
         raise RuntimeError("Could not determine video duration.")
 
-    # Target bitrate in bits/s (reserve 10% for container overhead + audio)
-    target_bits   = target_mb * 1024 * 1024 * 8
+    # Calculate required video bitrate
+    # target_bits = total bits available; subtract audio and container overhead (5%)
+    target_bits   = target_mb * 1024 * 1024 * 8 * 0.95
     audio_bitrate = 128_000   # 128 kbps audio
     video_bitrate = int((target_bits / duration) - audio_bitrate)
 
-    if video_bitrate < 50_000:
+    min_viable_mb = int(duration * (80_000 + audio_bitrate) / 8 / 1024 / 1024) + 1
+    if video_bitrate < 80_000:
         raise RuntimeError(
-            f"Target size too small for {duration:.0f}s video. "
-            f"Minimum ~{int(duration * (50_000 + audio_bitrate) / 8 / 1024 / 1024) + 1} MB."
+            f"Target too small for a {int(duration)}s video.\n"
+            f"Minimum viable size: <b>{min_viable_mb} MB</b>"
         )
 
-    passlog = os.path.join(TEMP_DIR, f"{stem}_passlog")
+    logger.info(f"Compress: duration={duration:.1f}s target={target_mb}MB "
+                f"video_bitrate={video_bitrate//1000}kbps")
 
-    # ── Pass 1 ────────────────────────────────────────────────────
-    if progress_cb:
-        await progress_cb(0, "pass 1/2", "?")
-
-    pass1 = [
-        ffmpeg, "-y",
-        "-i", video_path,
-        "-c:v", "libx264",
-        "-b:v", str(video_bitrate),
-        "-pass", "1",
-        "-passlogfile", passlog,
-        "-an",
-        "-f", "null", os.devnull,
-    ]
-    proc1 = await asyncio.create_subprocess_exec(
-        *pass1,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    await proc1.wait()
-
-    # ── Pass 2 ────────────────────────────────────────────────────
-    if progress_cb:
-        await progress_cb(50, "pass 2/2", "?")
-
-    pass2_cmd = [
+    cmd = [
         ffmpeg, "-y",
         "-progress", "pipe:1", "-nostats",
         "-i", video_path,
         "-c:v", "libx264",
+        "-preset", "fast",
         "-b:v", str(video_bitrate),
-        "-pass", "2",
-        "-passlogfile", passlog,
+        "-maxrate", str(int(video_bitrate * 1.5)),
+        "-bufsize", str(video_bitrate * 2),
         "-c:a", "aac",
         "-b:a", "128k",
+        "-movflags", "+faststart",
         output,
     ]
 
-    await _run_with_progress(pass2_cmd, duration, progress_cb)
-
-    # Cleanup passlog files
-    for f in [f"{passlog}-0.log", f"{passlog}-0.log.mbtree"]:
-        try:
-            os.remove(f)
-        except Exception:
-            pass
-
+    await _run_with_progress(cmd, duration, progress_cb)
     return output
 
 

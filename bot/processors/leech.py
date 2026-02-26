@@ -390,16 +390,15 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
                             eta     = int(remain / speed) if speed > 0 else 0
                             eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
                             text    = (
-                                f"🌐 <b>Downloading file…</b>\n\n"
+                                f"🌐 <i>Downloading…</i> <b>{pct}%</b>\n"
                                 f"<code>{bar}</code>\n"
-                                f"<b>{pct}%</b> — {format_size(downloaded)} / {format_size(total)}\n"
-                                f"🚀 {speed_str} · ⏱ ETA {eta_str}"
+                                f"📦 {format_size(downloaded)} / {format_size(total)}\n"
+                                f"🚀 {speed_str}  ·  ⏱ {eta_str}"
                             )
                         else:
                             text = (
-                                f"🌐 <b>Downloading file…</b>\n\n"
-                                f"📦 {format_size(downloaded)}\n"
-                                f"🚀 {speed_str}"
+                                f"🌐 <i>Downloading…</i>\n"
+                                f"📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
                             )
                         try:
                             await progress_msg.edit(text)

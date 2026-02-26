@@ -165,7 +165,7 @@ async def _run_compress(client: Client, msg: Message, status, uid: int, target_m
                 await status.edit(
                     f"🗜️ <b>Compressing…</b> <b>{pct}%</b>\n"
                     f"<code>{bar}</code>\n"
-                    f"🎯 Target: <b>{target_mb:.0f} MB</b>  ·  🚀 {speed}  ·  ⏱ {eta}"
+                    f"🎯 <b>{target_mb:.0f} MB</b> target  ·  🚀 {speed}  ·  ⏱ {eta}"
                 )
             except Exception:
                 pass
@@ -457,6 +457,7 @@ async def _get_video(client, data, job_id, progress_msg):
     source = data.get("source")
 
     if source == "upload":
+        from handlers.workflow import make_progress
         ext        = Path(data.get("file_name", "video.mp4")).suffix.lower() or ".mp4"
         video_path = os.path.join(TEMP_DIR, f"{job_id}_video{ext}")
         file_size  = data.get("file_size", 0)
