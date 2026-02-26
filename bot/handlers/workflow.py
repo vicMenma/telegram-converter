@@ -264,9 +264,12 @@ async def recv_text(client: Client, msg: Message):
     uid  = msg.from_user.id
 
     # Let settings channel input handler take priority
-    from handlers.settings import _WAITING_CHANNEL
-    if uid in _WAITING_CHANNEL:
-        return
+    try:
+        from handlers.settings import _WAITING_CHANNEL
+        if uid in _WAITING_CHANNEL:
+            return
+    except ImportError:
+        pass
 
     data = STATE.get(uid, {})
 
