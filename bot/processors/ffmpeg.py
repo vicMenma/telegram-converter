@@ -725,32 +725,42 @@ async def compress_to_size(
     logger.info(f"Compress: duration={duration:.1f}s target={target_mb}MB "
                 f"video_bitrate={video_bitrate//1000}kbps")
 
-    # Pre-scale: if source is >1080p or HEVC/AV1, scale to 1080p first
-    # This massively reduces memory usage and avoids OOM kills on Railway
+    # Pre-scale heavy sources to 720p H.264 before compressing
+    # Avoids OOM from decoding HEVC/4K while simultaneously re-encoding
     info = await _get_video_info(video_path)
     pre_scaled = None
-    if info["height"] > 1080 or info["codec"] in ("hevc", "h265", "av1", "vp9"):
-        logger.info(f"Pre-scaling {info['codec']} {info['width']}x{info['height']} → 1080p before compress")
+    is_heavy = info["codec"] in ("hevc", "h265", "av1", "vp9") or info["height"] > 1080
+
+    if is_heavy:
+        target_h   = min(info["height"], 720)  # cap at 720p — enough for compression
+        logger.info(f"Pre-scaling {info['codec']} {info['width']}x{info['height']} → {target_h}p")
         pre_scaled = os.path.join(TEMP_DIR, f"{stem}_prescale.mp4")
         pre_cmd = [
             _ffmpeg(), "-y",
-            "-hwaccel", "auto",
+            "-threads", "1",         # single thread — minimize memory usage
             "-i", video_path,
-            "-vf", "scale=-2:1080",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-vf", f"scale=-2:{target_h}",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "28",
+            "-threads", "1",
+            "-x264-params", "ref=1:bframes=0:subme=0:me=dia:trellis=0",
             "-c:a", "copy",
             pre_scaled,
         ]
         proc_pre = await asyncio.create_subprocess_exec(
             *pre_cmd,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
-        await proc_pre.wait()
-        if proc_pre.returncode == 0 and os.path.exists(pre_scaled):
+        _, pre_err = await proc_pre.wait(), await proc_pre.communicate()
+        if proc_pre.returncode == 0 and os.path.exists(pre_scaled) and os.path.getsize(pre_scaled) > 0:
             video_path = pre_scaled
+            # Recalculate duration from pre-scaled file
+            duration = await _get_duration(video_path)
         else:
-            pre_scaled = None  # failed, use original
+            logger.warning(f"Pre-scale failed, using original")
+            pre_scaled = None
 
     import multiprocessing as _mp2
     _ct = str(_mp2.cpu_count())
