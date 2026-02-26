@@ -40,8 +40,18 @@ YTDLP_DOMAINS = {
     "odysee.com", "ok.ru",
 }
 
+# CDN/redirector domains that block plain HTTP downloads — route via yt-dlp or skip
+_BLOCKED_DIRECT_DOMAINS = {
+    "seedr.cc", "rd.seedr.cc",
+    "alldebrid.com", "real-debrid.com", "rd2.real-debrid.com",
+    "debrid-link.fr", "premiumize.me",
+    "1fichier.com", "uptobox.com",
+    "mega.nz", "mediafire.com",
+    "rapidgator.net", "nitroflare.com",
+}
+
 def detect_link_type(url: str) -> str:
-    """Return 'magnet', 'ytdlp', or 'direct'."""
+    """Return 'magnet', 'ytdlp', 'direct', or 'blocked'."""
     if MAGNET_RE.match(url):
         return "magnet"
 
@@ -51,9 +61,17 @@ def detect_link_type(url: str) -> str:
 
     try:
         from urllib.parse import urlparse
-        host = urlparse(url).netloc.lower().lstrip("www.")
-        if any(host == d or host.endswith("." + d) for d in YTDLP_DOMAINS):
+        host = urlparse(url).netloc.lower()
+        host_stripped = host.lstrip("www.").lstrip("rd.")
+
+        # Check yt-dlp supported sites
+        if any(host_stripped == d or host_stripped.endswith("." + d) for d in YTDLP_DOMAINS):
             return "ytdlp"
+
+        # Check known-blocked CDN domains that require auth
+        for blocked in _BLOCKED_DIRECT_DOMAINS:
+            if host_stripped == blocked or host_stripped.endswith("." + blocked):
+                return "blocked"
     except Exception:
         pass
     return "direct"
@@ -235,22 +253,83 @@ async def _safe_edit(msg, text):
 # ── Direct URL download ────────────────────────────────────────────
 
 async def _get_file_info(url: str) -> tuple[int, str]:
-    """HEAD request to get file size and extension."""
+    """
+    Try HEAD first; if server rejects (4xx/5xx or no Content-Length),
+    fall back to a GET with Range: bytes=0-0 to sniff size and type.
+    Never raises — returns (0, guessed_ext) on complete failure.
+    """
     import aiohttp
+
+    ct_map = {
+        "video/mp4": ".mp4", "video/x-matroska": ".mkv",
+        "video/x-msvideo": ".avi", "video/webm": ".webm",
+        "video/quicktime": ".mov", "application/zip": ".zip",
+        "application/x-rar-compressed": ".rar",
+        "application/x-rar": ".rar", "application/pdf": ".pdf",
+    }
+
+    # Guess ext from URL path before any request
+    url_path = url.split("?")[0].rstrip("/")
+    ext = Path(url_path).suffix.lower()
+    if len(ext) > 5 or not ext:
+        ext = ".mkv"   # safe default for anime/video sites
+
+    def _parse_headers(headers) -> tuple[int, str]:
+        total = int(headers.get("Content-Length", 0) or 0)
+        ct    = headers.get("Content-Type", "")
+        detected = ct_map.get(ct.split(";")[0].strip(), "")
+        final_ext = detected or ext
+        return total, final_ext
+
     connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
-    async with aiohttp.ClientSession(connector=connector, headers={"User-Agent": "Mozilla/5.0"}) as session:
-        async with session.head(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            total = int(resp.headers.get("Content-Length", 0))
-            ct    = resp.headers.get("Content-Type", "")
-            ext   = Path(url.split("?")[0]).suffix.lower()
-            if not ext:
-                ct_map = {
-                    "video/mp4": ".mp4", "video/x-matroska": ".mkv",
-                    "video/webm": ".webm", "application/zip": ".zip",
-                    "application/x-rar": ".rar", "application/pdf": ".pdf",
-                }
-                ext = ct_map.get(ct.split(";")[0].strip(), ".bin")
-            return total, ext
+    timeout   = aiohttp.ClientTimeout(total=15, connect=10)
+
+    try:
+        async with aiohttp.ClientSession(
+            connector=connector, headers=_BROWSER_HEADERS
+        ) as session:
+            # ── Try HEAD ──────────────────────────────────────────
+            try:
+                async with session.head(
+                    url, allow_redirects=True, timeout=timeout
+                ) as resp:
+                    if resp.status < 400:
+                        total, detected = _parse_headers(resp.headers)
+                        if total > 0:
+                            logger.info(f"HEAD ok: {total // 1024**2} MB {detected}")
+                            return total, detected
+            except Exception as e:
+                logger.debug(f"HEAD failed: {e}")
+
+            # ── Fall back: GET Range: bytes=0-0 ───────────────────
+            try:
+                range_headers = dict(_BROWSER_HEADERS)
+                range_headers["Range"] = "bytes=0-0"
+                async with session.get(
+                    url, headers=range_headers,
+                    allow_redirects=True, timeout=timeout
+                ) as resp:
+                    if resp.status in (200, 206):
+                        cr = resp.headers.get("Content-Range", "")
+                        # Content-Range: bytes 0-0/TOTAL
+                        if "/" in cr:
+                            try:
+                                total = int(cr.split("/")[1])
+                            except Exception:
+                                total = 0
+                        else:
+                            total = int(resp.headers.get("Content-Length", 0) or 0)
+                        _, detected = _parse_headers(resp.headers)
+                        logger.info(f"Range probe ok: {total // 1024**2} MB {detected}")
+                        return total, detected
+            except Exception as e:
+                logger.debug(f"Range probe failed: {e}")
+
+    except Exception as e:
+        logger.warning(f"_get_file_info failed entirely: {e}")
+
+    logger.info(f"Could not probe size, using ext={ext}")
+    return 0, ext
 
 
 async def _aria2c_download(url: str, dest: str, progress_msg=None, total: int = 0) -> None:
@@ -326,9 +405,9 @@ async def _aria2c_download(url: str, dest: str, progress_msg=None, total: int = 
 
 async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
     """
-    Download any direct file URL with parallel chunks via aria2c.
-    Falls back to aiohttp if aria2c is not available.
-    Returns local file path.
+    Download any direct file URL.
+    Tries parallel chunks first for speed; falls back to single stream
+    if server returns 4xx/5xx on range requests (e.g. 503, 403).
     """
     import aiohttp
     import aiofiles
@@ -341,22 +420,16 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
 
     dest = os.path.join(TEMP_DIR, f"{job_id}_direct{ext}")
 
-    # Use aria2c if available — 16 parallel connections
+    # Use aria2c if available
     if _shutil.which("aria2c"):
         logger.info("Using aria2c for direct download")
         await _aria2c_download(url, dest, progress_msg=progress_msg, total=total)
         return dest
 
-    # Parallel chunk download — splits file into N chunks downloaded simultaneously
-    logger.info(f"Using parallel aiohttp for direct download ({total // 1024**2} MB)")
-    CHUNK_COUNT   = 16           # parallel connections
-    CHUNK_SIZE    = max(total // CHUNK_COUNT, 4 * 1024 * 1024) if total > 0 else 8 * 1024 * 1024
-
-    connector  = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300, force_close=False)
-    headers    = {"User-Agent": "Mozilla/5.0"}
-    downloaded = 0
-    start_time = time.time()
+    headers = _BROWSER_HEADERS
+    start_time  = time.time()
     last_update = [0.0]
+    downloaded  = 0
 
     async def _update_progress():
         now = time.time()
@@ -386,44 +459,76 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
         except Exception:
             pass
 
-    # Pre-allocate file
-    async with aiofiles.open(dest, "wb") as fh:
-        if total > 0:
-            await fh.seek(total - 1)
-            await fh.write(b"\0")
+    connector = aiohttp.TCPConnector(limit=0, ttl_dns_cache=300)
 
-    async def _download_chunk(session, start: int, end: int):
+    async def _single_stream(session):
+        """Reliable single-connection download."""
         nonlocal downloaded
-        chunk_headers = dict(headers)
-        if total > 0:
-            chunk_headers["Range"] = f"bytes={start}-{end}"
         async with session.get(
-            url,
-            headers=chunk_headers,
-            allow_redirects=True,
+            url, headers=headers, allow_redirects=True,
             timeout=aiohttp.ClientTimeout(total=3600, connect=30),
         ) as resp:
             if resp.status not in (200, 206):
                 raise RuntimeError(f"Server returned HTTP {resp.status}")
-            async with aiofiles.open(dest, "r+b") as fh:
-                await fh.seek(start)
-                async for data in resp.content.iter_chunked(1024 * 1024):
-                    await fh.write(data)
-                    downloaded += len(data)
+            async with aiofiles.open(dest, "wb") as fh:
+                async for chunk in resp.content.iter_chunked(2 * 1024 * 1024):
+                    await fh.write(chunk)
+                    downloaded += len(chunk)
                     await _update_progress()
 
-    async with aiohttp.ClientSession(connector=connector, headers=headers) as session:
-        if total > 0:
-            # Split into chunks and download in parallel
-            ranges  = [(i * CHUNK_SIZE, min((i + 1) * CHUNK_SIZE - 1, total - 1))
-                       for i in range((total + CHUNK_SIZE - 1) // CHUNK_SIZE)]
-            tasks   = [_download_chunk(session, s, e) for s, e in ranges]
-            # Run in batches of CHUNK_COUNT to avoid overwhelming
-            for i in range(0, len(tasks), CHUNK_COUNT):
-                await asyncio.gather(*tasks[i:i + CHUNK_COUNT])
-        else:
-            # Unknown size — single stream
-            await _download_chunk(session, 0, 0)
+    async def _parallel_chunks(session, n_chunks: int = 8):
+        """Parallel range-request download. Raises on any non-206 response."""
+        nonlocal downloaded
+        chunk_size = max(total // n_chunks, 4 * 1024 * 1024)
+
+        # Pre-allocate
+        async with aiofiles.open(dest, "wb") as fh:
+            await fh.seek(total - 1)
+            await fh.write(b"\0")
+
+        async def _fetch_range(start: int, end: int):
+            nonlocal downloaded
+            rh = dict(headers)
+            rh["Range"] = f"bytes={start}-{end}"
+            async with session.get(
+                url, headers=rh, allow_redirects=True,
+                timeout=aiohttp.ClientTimeout(total=3600, connect=30),
+            ) as resp:
+                if resp.status == 206:
+                    async with aiofiles.open(dest, "r+b") as fh:
+                        await fh.seek(start)
+                        async for data in resp.content.iter_chunked(1024 * 1024):
+                            await fh.write(data)
+                            downloaded += len(data)
+                            await _update_progress()
+                elif resp.status == 200:
+                    # Server ignored Range header — fall back to single stream
+                    raise ValueError("no_range")
+                else:
+                    raise RuntimeError(f"Server returned HTTP {resp.status}")
+
+        ranges = [(i * chunk_size, min((i + 1) * chunk_size - 1, total - 1))
+                  for i in range((total + chunk_size - 1) // chunk_size)]
+        # Run in batches of n_chunks
+        for i in range(0, len(ranges), n_chunks):
+            await asyncio.gather(*[_fetch_range(s, e) for s, e in ranges[i:i + n_chunks]])
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        # Try parallel only if server reported a known size
+        if total > 4 * 1024 * 1024:
+            try:
+                logger.info(f"Trying parallel download ({total // 1024**2} MB, 8 chunks)")
+                await _parallel_chunks(session, n_chunks=8)
+                return dest
+            except (ValueError, RuntimeError) as e:
+                logger.warning(f"Parallel download failed ({e}), falling back to single stream")
+                downloaded = 0  # reset counter
+                if os.path.exists(dest):
+                    os.remove(dest)
+
+        # Single stream — works with any server
+        logger.info("Using single-stream download")
+        await _single_stream(session)
 
     return dest
 

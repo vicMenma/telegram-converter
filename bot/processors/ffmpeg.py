@@ -725,6 +725,33 @@ async def compress_to_size(
     logger.info(f"Compress: duration={duration:.1f}s target={target_mb}MB "
                 f"video_bitrate={video_bitrate//1000}kbps")
 
+    # Pre-scale: if source is >1080p or HEVC/AV1, scale to 1080p first
+    # This massively reduces memory usage and avoids OOM kills on Railway
+    info = await _get_video_info(video_path)
+    pre_scaled = None
+    if info["height"] > 1080 or info["codec"] in ("hevc", "h265", "av1", "vp9"):
+        logger.info(f"Pre-scaling {info['codec']} {info['width']}x{info['height']} → 1080p before compress")
+        pre_scaled = os.path.join(TEMP_DIR, f"{stem}_prescale.mp4")
+        pre_cmd = [
+            _ffmpeg(), "-y",
+            "-hwaccel", "auto",
+            "-i", video_path,
+            "-vf", "scale=-2:1080",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "copy",
+            pre_scaled,
+        ]
+        proc_pre = await asyncio.create_subprocess_exec(
+            *pre_cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc_pre.wait()
+        if proc_pre.returncode == 0 and os.path.exists(pre_scaled):
+            video_path = pre_scaled
+        else:
+            pre_scaled = None  # failed, use original
+
     import multiprocessing as _mp2
     _ct = str(_mp2.cpu_count())
     cmd = [
@@ -749,6 +776,13 @@ async def compress_to_size(
     ]
 
     await _run_with_progress(cmd, duration, progress_cb)
+
+    if pre_scaled and os.path.exists(pre_scaled):
+        try:
+            os.remove(pre_scaled)
+        except Exception:
+            pass
+
     return output
 
 

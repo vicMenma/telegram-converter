@@ -97,6 +97,15 @@ async def recv_link(client: Client, msg: Message):
                 f"> <i>Try sending the direct video URL instead</i>"
             )
 
+    elif link_type == "blocked":
+        await msg.reply(
+            "🔒 <b>This link requires authentication</b>\n\n"
+            f"<code>{url[:80]}</code>\n\n"
+            "> This service (e.g. Seedr, Real-Debrid) requires login.\n"
+            "> The bot cannot access protected links.\n\n"
+            "<i>Download the file first, then send it directly to the bot.</i>"
+        )
+
     elif link_type == "direct":
         status = await msg.reply("📥 <i>Starting download…</i>")
         register(job_id, uid, username, "direct", url[:60])
