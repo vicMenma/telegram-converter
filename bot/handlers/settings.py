@@ -5,7 +5,11 @@
 import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import MessageNotModified, FloodWait
+try:
+    from pyrogram.errors import MessageNotModified, FloodWait
+except ImportError:
+    MessageNotModified = Exception
+    FloodWait = Exception
 from client import app
 from utils.settings import get, set as sset, get_all, reset
 

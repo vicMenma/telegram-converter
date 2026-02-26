@@ -201,7 +201,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     file_name = Path(file_path).name
     ext       = Path(file_path).suffix.lower()
 
-    VIDEO_EXTS = {".mp4", ".m4v"}  # only these render nicely as Telegram videos
+    VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".ts", ".3gp"}
 
     await progress_msg.edit(
         f"📤 _Uploading…_ `0%`\n`░░░░░░░░░░░░░░░░░░░░`\n📦 {format_size(size)}"

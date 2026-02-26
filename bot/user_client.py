@@ -4,7 +4,7 @@ Uses pyrofork for optimized MTProto speed.
 Session string stored in USER_SESSION env var.
 """
 
-from pyrogram import Client
+from pyrogram import Client, enums
 from config import API_ID, API_HASH
 import os
 
@@ -27,5 +27,6 @@ def get_user_client() -> Client | None:
         session_string=session_string,
         workers=8,
         max_concurrent_transmissions=10,
+        parse_mode=enums.ParseMode.MARKDOWN,
     )
     return _user_app
