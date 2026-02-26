@@ -13,5 +13,5 @@ app = Client(
     bot_token=BOT_TOKEN,
     workers=16,
     max_concurrent_transmissions=10,
-    parse_mode=enums.ParseMode.MARKDOWN,
+    parse_mode=enums.ParseMode.HTML,
 )

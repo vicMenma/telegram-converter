@@ -172,14 +172,14 @@ async def ytdlp_download(url: str, format_id: str, job_id: str, progress_msg=Non
             filled = pct // 5
             bar    = "█" * filled + "░" * (20 - filled)
             text   = (
-                f"📥 _Downloading…_ **{pct}%**\n"
-                f"`{bar}`\n"
+                f"📥 <i>Downloading…</i> <b>{pct}%</b>\n"
+                f"<code>{bar}</code>\n"
                 f"📦 {format_size(downloaded)} / {format_size(total)}\n"
                 f"🚀 {speed_str}  ·  ⏱ {eta_str}"
             )
         else:
             text = (
-                f"📥 _Downloading…_\n"
+                f"📥 <i>Downloading…</i>\n"
                 f"📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
             )
 
@@ -307,13 +307,13 @@ async def _aria2c_download(url: str, dest: str, progress_msg=None, total: int = 
                     eta    = int(remain / speed) if speed > 0 else 0
                     eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
                     text   = (
-                        f"🌐 _Downloading…_ **{pct}%**\n"
-                        f"`{bar}`\n"
+                        f"🌐 <i>Downloading…</i> <b>{pct}%</b>\n"
+                        f"<code>{bar}</code>\n"
                         f"📦 {format_size(downloaded)} / {format_size(total)}\n"
                         f"🚀 {speed_str}  ·  ⏱ {eta_str}"
                     )
                 else:
-                    text = f"🌐 _Downloading…_\n📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
+                    text = f"🌐 <i>Downloading…</i>\n📦 {format_size(downloaded)}  ·  🚀 {speed_str}"
                 try:
                     await progress_msg.edit(text)
                 except Exception:
@@ -390,14 +390,14 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
                             eta     = int(remain / speed) if speed > 0 else 0
                             eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
                             text    = (
-                                f"🌐 **Downloading file…**\n\n"
-                                f"`{bar}`\n"
-                                f"**{pct}%** — {format_size(downloaded)} / {format_size(total)}\n"
+                                f"🌐 <b>Downloading file…</b>\n\n"
+                                f"<code>{bar}</code>\n"
+                                f"<b>{pct}%</b> — {format_size(downloaded)} / {format_size(total)}\n"
                                 f"🚀 {speed_str} · ⏱ ETA {eta_str}"
                             )
                         else:
                             text = (
-                                f"🌐 **Downloading file…**\n\n"
+                                f"🌐 <b>Downloading file…</b>\n\n"
                                 f"📦 {format_size(downloaded)}\n"
                                 f"🚀 {speed_str}"
                             )
@@ -420,9 +420,9 @@ async def magnet_download(source: str, job_id: str, progress_msg=None) -> str:
         import libtorrent as lt
     except ImportError:
         raise RuntimeError(
-            "❌ Magnet downloads require **libtorrent**.\n"
+            "❌ Magnet downloads require <b>libtorrent</b>.\n"
             "It is not installed on this server.\n\n"
-            "Ask the bot admin to add `python-libtorrent` to the Dockerfile."
+            "Ask the bot admin to add <code>python-libtorrent</code> to the Dockerfile."
         )
 
     dest_dir = os.path.join(TEMP_DIR, f"{job_id}_torrent")
@@ -467,8 +467,8 @@ async def magnet_download(source: str, job_id: str, progress_msg=None) -> str:
             state_str = state_map.get(s.state, "⏳ Working")
 
             text = (
-                f"🧲 _Downloading…_ **{pct}%**\n"
-                f"`{bar}`\n"
+                f"🧲 <i>Downloading…</i> <b>{pct}%</b>\n"
+                f"<code>{bar}</code>\n"
                 f"{state_str}  ·  👥 {peers} peers\n"
                 f"🚀 {speed_str}"
             )

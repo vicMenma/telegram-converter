@@ -36,25 +36,25 @@ def _settings_text(uid: int) -> str:
     )
     res_label    = "Same as source" if s["default_res"] == "source" else f"{s['default_res']}p"
     fwd_icon     = "✅" if s["auto_forward"] else "❌"
-    channel      = s["channel_id"] if s["channel_id"] else "_not set_"
+    channel      = s["channel_id"] if s["channel_id"] else "<i>not set</i>"
 
     return (
-        "⚙️✨ **SETTINGS** ✨⚙️\n"
+        "⚙️✨ <b>SETTINGS</b> ✨⚙️\n"
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-        f"{upload_icon} **Upload type:** `{s['upload_type'].capitalize()}`\n"
+        f"{upload_icon} <b>Upload type:</b> <code>{s['upload_type'].capitalize()}</code>\n"
         f"> Send files as Video or Document\n\n"
-        f"{preset_icon} **Encode speed:** `{s['preset'].capitalize()}`\n"
+        f"{preset_icon} <b>Encode speed:</b> <code>{s['preset'].capitalize()}</code>\n"
         f"> FFmpeg preset — faster = larger file\n\n"
-        f"🎨 **Quality (CRF):** `{crf}` — {quality_label}\n"
+        f"🎨 <b>Quality (CRF):</b> <code>{crf}</code> — {quality_label}\n"
         f"> Lower = better quality, bigger & slower\n\n"
-        f"📐 **Default resolution:** `{res_label}`\n"
+        f"📐 <b>Default resolution:</b> <code>{res_label}</code>\n"
         f"> Auto-applied when changing resolution\n\n"
-        f"📢 **Forward channel:** {channel}\n"
-        f"> ID like `-1001234567890` or `@username`\n\n"
-        f"{fwd_icon} **Auto-forward:** `{'On' if s['auto_forward'] else 'Off'}`\n"
+        f"📢 <b>Forward channel:</b> {channel}\n"
+        f"> ID like <code>-1001234567890</code> or <code>@username</code>\n\n"
+        f"{fwd_icon} <b>Auto-forward:</b> <code>{'On' if s['auto_forward'] else 'Off'}</code>\n"
         f"> Skip confirmation, forward automatically\n\n"
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
-        "_Tap any setting below to change it_"
+        "<i>Tap any setting below to change it</i>"
     )
 
 
@@ -202,13 +202,13 @@ async def settings_callback(client: Client, cb: CallbackQuery):
         _WAITING_CHANNEL[uid] = True
         await cb.answer()
         await _edit(cb,
-            "📢✨ **SET FORWARD CHANNEL** ✨📢\n"
+            "📢✨ <b>SET FORWARD CHANNEL</b> ✨📢\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "Send your channel ID or username:\n\n"
-            "> `-1001234567890` — private channel ID\n"
-            "> `@mychannel` — public channel username\n\n"
-            "⚠️ _Make sure the bot is admin in the channel_\n\n"
-            "_Type_ `clear` _to remove the current channel_",
+            "> <code>-1001234567890</code> — private channel ID\n"
+            "> <code>@mychannel</code> — public channel username\n\n"
+            "⚠️ <i>Make sure the bot is admin in the channel</i>\n\n"
+            "<i>Type</i> <code>clear</code> <i>to remove the current channel</i>",
             InlineKeyboardMarkup([[InlineKeyboardButton("✕ Cancel", callback_data="cfg:cancel_channel")]])
         )
         return
@@ -224,11 +224,11 @@ async def settings_callback(client: Client, cb: CallbackQuery):
     if action == "upload_type":
         await cb.answer()
         await _edit(cb,
-            "📹 **UPLOAD TYPE**\n"
+            "📹 <b>UPLOAD TYPE</b>\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-            "> **Video** — inline player, thumbnail, duration\n"
-            "> **Document** — compact, preserves filename\n\n"
-            "_Which format do you prefer?_",
+            "> <b>Video</b> — inline player, thumbnail, duration\n"
+            "> <b>Document</b> — compact, preserves filename\n\n"
+            "<i>Which format do you prefer?</i>",
             _upload_type_keyboard()
         )
         return
@@ -237,13 +237,13 @@ async def settings_callback(client: Client, cb: CallbackQuery):
     if action == "preset":
         await cb.answer()
         await _edit(cb,
-            "⚡ **ENCODE SPEED (PRESET)**\n"
+            "⚡ <b>ENCODE SPEED (PRESET)</b>\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-            "> **Ultrafast** — fastest, larger file\n"
-            "> **Veryfast** — slightly smaller, barely slower\n"
-            "> **Fast** — good balance\n"
-            "> **Medium** — best compression, slowest\n\n"
-            "_Recommended: Ultrafast or Veryfast on Railway_",
+            "> <b>Ultrafast</b> — fastest, larger file\n"
+            "> <b>Veryfast</b> — slightly smaller, barely slower\n"
+            "> <b>Fast</b> — good balance\n"
+            "> <b>Medium</b> — best compression, slowest\n\n"
+            "<i>Recommended: Ultrafast or Veryfast on Railway</i>",
             _preset_keyboard()
         )
         return
@@ -252,13 +252,13 @@ async def settings_callback(client: Client, cb: CallbackQuery):
     if action == "crf":
         await cb.answer()
         await _edit(cb,
-            "🎨 **VIDEO QUALITY (CRF)**\n"
+            "🎨 <b>VIDEO QUALITY (CRF)</b>\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-            "> **High (18)** — near lossless, large file\n"
-            "> **Good (23)** — default, great quality\n"
-            "> **Medium (28)** — smaller, visible loss\n"
-            "> **Small (35)** — maximum compression\n\n"
-            "_Lower CRF = better quality, bigger file_",
+            "> <b>High (18)</b> — near lossless, large file\n"
+            "> <b>Good (23)</b> — default, great quality\n"
+            "> <b>Medium (28)</b> — smaller, visible loss\n"
+            "> <b>Small (35)</b> — maximum compression\n\n"
+            "<i>Lower CRF = better quality, bigger file</i>",
             _crf_keyboard()
         )
         return
@@ -267,14 +267,14 @@ async def settings_callback(client: Client, cb: CallbackQuery):
     if action == "default_res":
         await cb.answer()
         await _edit(cb,
-            "📐 **DEFAULT RESOLUTION**\n"
+            "📐 <b>DEFAULT RESOLUTION</b>\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-            "> **Source** — keep original resolution\n"
-            "> **1080p** — Full HD\n"
-            "> **720p** — HD, best size/quality ratio\n"
-            "> **480p** — SD, small file\n"
-            "> **360p** — very small, mobile-friendly\n\n"
-            "_Applied automatically when you change resolution_",
+            "> <b>Source</b> — keep original resolution\n"
+            "> <b>1080p</b> — Full HD\n"
+            "> <b>720p</b> — HD, best size/quality ratio\n"
+            "> <b>480p</b> — SD, small file\n"
+            "> <b>360p</b> — very small, mobile-friendly\n\n"
+            "<i>Applied automatically when you change resolution</i>",
             _res_keyboard()
         )
         return
@@ -318,13 +318,13 @@ async def settings_text_input(client: Client, msg: Message):
 
     if text.lower() == "clear":
         sset(uid, "channel_id", "")
-        await msg.reply("✅ _Channel removed._\n\nUse /settings to configure again.")
+        await msg.reply("✅ <i>Channel removed.</i>\n\nUse /settings to configure again.")
         return
 
     if not (text.startswith("@") or text.lstrip("-").isdigit()):
         await msg.reply(
-            "❌ _Invalid format._\n\n"
-            "Use `-1001234567890` or `@username`.\n"
+            "❌ <i>Invalid format.</i>\n\n"
+            "Use <code>-1001234567890</code> or <code>@username</code>.\n"
             "Type /settings to try again."
         )
         return
@@ -333,14 +333,14 @@ async def settings_text_input(client: Client, msg: Message):
         chat = await client.get_chat(text)
         sset(uid, "channel_id", text)
         await msg.reply(
-            f"✅ **Channel saved!**\n\n"
-            f"📢 `{chat.title}`\n"
-            f"🆔 `{text}`\n\n"
-            f"_Files will be forwarded here after processing._"
+            f"✅ <b>Channel saved!</b>\n\n"
+            f"📢 <code>{chat.title}</code>\n"
+            f"🆔 <code>{text}</code>\n\n"
+            f"<i>Files will be forwarded here after processing.</i>"
         )
     except Exception:
         await msg.reply(
-            f"❌ **Could not access** `{text}`\n\n"
+            f"❌ <b>Could not access</b> <code>{text}</code>\n\n"
             f"Make sure:\n"
             f"> Bot is admin in the channel\n"
             f"> The ID or username is correct\n\n"

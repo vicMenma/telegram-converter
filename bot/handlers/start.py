@@ -42,7 +42,7 @@ def main_menu_keyboard():
 
 # ── Welcome message ───────────────────────────────────────────────
 
-WELCOME = """🎬✨ __Welcome to **Video Studio Bot**!__ ✨🎬
+WELCOME = """🎬✨ <i>Welcome to <b>Video Studio Bot</b>!</i> ✨🎬
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
 Your all-in-one video tool — right inside Telegram.
@@ -50,76 +50,76 @@ No apps. No watermarks. No limits. 🚀
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-🔤 **BURN SUBTITLES**
+🔤 <b>BURN SUBTITLES</b>
 > Permanently embed subtitles into your video.
-> 📄 Supports: `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
+> 📄 Supports: <code>SRT</code> · <code>ASS</code> · <code>SSA</code> · <code>VTT</code> · <code>SUB</code> · <code>TXT</code>
 
-📐 **CHANGE RESOLUTION**
+📐 <b>CHANGE RESOLUTION</b>
 > Re-encode to any standard resolution instantly.
-> 🖥 `360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
+> 🖥 <code>360p</code> · <code>480p</code> · <code>720p</code> · <code>1080p</code> · <code>1440p</code> · <code>4K</code>
 
-🔗 **LEECH ANY LINK**
+🔗 <b>LEECH ANY LINK</b>
 > YouTube, Twitter, Instagram, TikTok & 1000+ sites.
 > Pick your quality before downloading! 🎯
 
-🧲 **MAGNET / TORRENT**
-> Paste any magnet link or drop a `.torrent` file.
+🧲 <b>MAGNET / TORRENT</b>
+> Paste any magnet link or drop a <code>.torrent</code> file.
 > Bot downloads and sends it straight to you. 📥
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-💪 **WHY USE THIS BOT?**
+💪 <b>WHY USE THIS BOT?</b>
 
-📁 Up to **2 GB** — zero Telegram restrictions
-⚡ Powered by **FFmpeg + yt-dlp** — industry standard
-🔒 **Privacy first** — files deleted right after processing
-📱 Works on **any device** — phone, tablet, desktop
+📁 Up to <b>2 GB</b> — zero Telegram restrictions
+⚡ Powered by <b>FFmpeg + yt-dlp</b> — industry standard
+🔒 <b>Privacy first</b> — files deleted right after processing
+📱 Works on <b>any device</b> — phone, tablet, desktop
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-👇 **Ready? Send a video, or paste any link below!**"""
+👇 <b>Ready? Send a video, or paste any link below!</b>"""
 
 
 # ── Help message ──────────────────────────────────────────────────
 
-HELP_TEXT = """❓✨ **HOW TO USE VIDEO STUDIO BOT** ✨❓
+HELP_TEXT = """❓✨ <b>HOW TO USE VIDEO STUDIO BOT</b> ✨❓
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-**📤 STEP 1 — Send your video**
+<b>📤 STEP 1 — Send your video</b>
 
-📎 **Upload a file** _(up to 2 GB)_
+📎 <b>Upload a file</b> <i>(up to 2 GB)</i>
 Drop your video directly in the chat.
-Supported: `MP4` `MKV` `AVI` `MOV` `WEBM` `FLV` `TS` `3GP`
+Supported: <code>MP4</code> <code>MKV</code> <code>AVI</code> <code>MOV</code> <code>WEBM</code> <code>FLV</code> <code>TS</code> <code>3GP</code>
 
-🔗 **Send a URL** _(direct link or supported site)_
-> `https://example.com/video.mp4`
+🔗 <b>Send a URL</b> <i>(direct link or supported site)</i>
+> <code>https://example.com/video.mp4</code>
 
-🧲 **Send a magnet link**
-> `magnet:?xt=urn:btih:…`
+🧲 <b>Send a magnet link</b>
+> <code>magnet:?xt=urn:btih:…</code>
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-🔤 **BURNING SUBTITLES**
+🔤 <b>BURNING SUBTITLES</b>
 > 1️⃣ Send your video
-> 2️⃣ Tap 🔤 **Burn Subtitles**
+> 2️⃣ Tap 🔤 <b>Burn Subtitles</b>
 > 3️⃣ Send subtitle file or paste a URL
 > 4️⃣ Receive your video with permanent subs ✅
 
-📄 Formats: `SRT` · `ASS` · `SSA` · `VTT` · `SUB` · `TXT`
+📄 Formats: <code>SRT</code> · <code>ASS</code> · <code>SSA</code> · <code>VTT</code> · <code>SUB</code> · <code>TXT</code>
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-📐 **CHANGING RESOLUTION**
+📐 <b>CHANGING RESOLUTION</b>
 > 1️⃣ Send your video
-> 2️⃣ Tap 📐 **Change Resolution**
+> 2️⃣ Tap 📐 <b>Change Resolution</b>
 > 3️⃣ Pick your target resolution
 > 4️⃣ Receive your re-encoded video ✅
 
-🖥 Options: `360p` · `480p` · `720p` · `1080p` · `1440p` · `4K`
+🖥 Options: <code>360p</code> · <code>480p</code> · <code>720p</code> · <code>1080p</code> · <code>1440p</code> · <code>4K</code>
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-💡 **TIPS**
+💡 <b>TIPS</b>
 > 🔸 720p is the sweet spot for quality vs size
 > 🔸 ASS subtitles preserve custom fonts and styles
 > 🔸 SRT is the safest format for compatibility
@@ -154,40 +154,40 @@ def _get_stats() -> str:
             if pct < thresholds[1]: return "🟡"
             return "🔴"
 
-        return f"""📊✨ **SERVER STATS** ✨📊
+        return f"""📊✨ <b>SERVER STATS</b> ✨📊
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
 
-{dot(cpu)} **CPU Usage**
-`{bar(cpu)}` **{cpu:.1f}%**
+{dot(cpu)} <b>CPU Usage</b>
+<code>{bar(cpu)}</code> <b>{cpu:.1f}%</b>
 
-{dot(ram.percent)} **RAM Usage**
-`{bar(ram.percent)}` **{ram.percent:.1f}%**
-> 💾 `{ram_used:.2f} GB / {ram_total:.2f} GB` used
+{dot(ram.percent)} <b>RAM Usage</b>
+<code>{bar(ram.percent)}</code> <b>{ram.percent:.1f}%</b>
+> 💾 <code>{ram_used:.2f} GB / {ram_total:.2f} GB</code> used
 
-{dot(disk.percent)} **Disk Usage**
-`{bar(disk.percent)}` **{disk.percent:.1f}%**
-> 📁 `{disk_used:.1f} GB` used · `{disk_free:.1f} GB` free
+{dot(disk.percent)} <b>Disk Usage</b>
+<code>{bar(disk.percent)}</code> <b>{disk.percent:.1f}%</b>
+> 📁 <code>{disk_used:.1f} GB</code> used · <code>{disk_free:.1f} GB</code> free
 
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-⏱ **Uptime:** `{uptime_str}`
-🐍 **Python:** `{platform.python_version()}`
-🖥 **OS:** `{platform.system()} {platform.release()}`"""
+⏱ <b>Uptime:</b> <code>{uptime_str}</code>
+🐍 <b>Python:</b> <code>{platform.python_version()}</code>
+🖥 <b>OS:</b> <code>{platform.system()} {platform.release()}</code>"""
 
     except ImportError:
-        return f"""📊✨ **SERVER STATS** ✨📊
+        return f"""📊✨ <b>SERVER STATS</b> ✨📊
 ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
-⏱ **Uptime:** `{uptime_str}`
-🐍 **Python:** `{platform.python_version()}`
-🖥 **OS:** `{platform.system()} {platform.release()}`
+⏱ <b>Uptime:</b> <code>{uptime_str}</code>
+🐍 <b>Python:</b> <code>{platform.python_version()}</code>
+🖥 <b>OS:</b> <code>{platform.system()} {platform.release()}</code>
 
-_⚠️ Install psutil for full stats_"""
+<i>⚠️ Install psutil for full stats</i>"""
 
 
 # ── Queue helpers ─────────────────────────────────────────────────
 
 def _queue_text(jobs: list) -> str:
     lines = [
-        f"⚙️✨ **ACTIVE JOBS** — {len(jobs)} running ✨⚙️\n"
+        f"⚙️✨ <b>ACTIVE JOBS</b> — {len(jobs)} running ✨⚙️\n"
         f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n"
     ]
     for job in jobs:
@@ -195,11 +195,11 @@ def _queue_text(jobs: list) -> str:
         elapsed = elapsed_str(job["started"])
         desc    = job["desc"][:40] + "…" if len(job["desc"]) > 40 else job["desc"]
         lines.append(
-            f"{emoji} **{job['type'].upper()}** · `{job['job_id']}`\n"
+            f"{emoji} <b>{job['type'].upper()}</b> · <code>{job['job_id']}</code>\n"
             f"> 👤 {job['username']}\n"
-            f"> 📄 `{desc}`\n"
+            f"> 📄 <code>{desc}</code>\n"
             f"> 📊 {job['status']}\n"
-            f"> ⏱ Running `{elapsed}`\n"
+            f"> ⏱ Running <code>{elapsed}</code>\n"
             f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
         )
     return "\n".join(lines)
@@ -236,7 +236,7 @@ async def cmd_help(client: Client, msg: Message):
 
 @app.on_message(filters.command("stats") & filters.private)
 async def cmd_stats(client: Client, msg: Message):
-    loading = await msg.reply("_Fetching stats…_")
+    loading = await msg.reply("<i>Fetching stats…</i>")
     await loading.edit(_get_stats(), reply_markup=InlineKeyboardMarkup([
         [InlineKeyboardButton("🔄 Refresh", callback_data="menu:stats")]
     ]))
@@ -250,7 +250,7 @@ async def cmd_queue(client: Client, msg: Message):
     jobs = get_all()
     if not jobs:
         await msg.reply(
-            "⚙️✨ **ACTIVE JOBS** ✨⚙️\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n_No jobs running right now._"
+            "⚙️✨ <b>ACTIVE JOBS</b> ✨⚙️\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n_No jobs running right now._"
         )
         return
     await msg.reply(_queue_text(jobs), reply_markup=_queue_keyboard(jobs))
@@ -272,9 +272,9 @@ async def queue_callback(client: Client, cb: CallbackQuery):
         if not jobs:
             await cb.message.edit(
                 "╔══════════════════════════════╗\n"
-                "    ⚙️  **ACTIVE JOBS**\n"
+                "    ⚙️  <b>ACTIVE JOBS</b>\n"
                 "╚══════════════════════════════╝\n\n"
-                "_No jobs running right now._"
+                "<i>No jobs running right now.</i>"
             )
         else:
             await cb.message.edit(_queue_text(jobs), reply_markup=_queue_keyboard(jobs))
@@ -291,9 +291,9 @@ async def queue_callback(client: Client, cb: CallbackQuery):
         if not jobs:
             await cb.message.edit(
                 "╔══════════════════════════════╗\n"
-                "    ⚙️  **ACTIVE JOBS**\n"
+                "    ⚙️  <b>ACTIVE JOBS</b>\n"
                 "╚══════════════════════════════╝\n\n"
-                "_No jobs running right now._"
+                "<i>No jobs running right now.</i>"
             )
         else:
             await cb.message.edit(_queue_text(jobs), reply_markup=_queue_keyboard(jobs))
@@ -304,7 +304,7 @@ async def queue_callback(client: Client, cb: CallbackQuery):
         for job in jobs:
             cancel(job["job_id"])
         await cb.answer(f"🛑 Cancelled {count} job(s).", show_alert=True)
-        await cb.message.edit("_All jobs cancelled._")
+        await cb.message.edit("<i>All jobs cancelled.</i>")
 
 
 # ── Callback: menu navigation ─────────────────────────────────────
@@ -316,30 +316,30 @@ async def menu_callbacks(client: Client, cb: CallbackQuery):
 
     if action == "leech":
         await cb.message.reply(
-            "🔗✨ **LEECH ANY LINK** ✨🔗\n"
+            "🔗✨ <b>LEECH ANY LINK</b> ✨🔗\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "Paste any link and I'll download it for you!\n\n"
             "> 🎬 YouTube · Twitter · Instagram\n"
             "> 📱 TikTok · Vimeo · Facebook\n"
-            "> 🔗 Direct `.mp4` `.mkv` `.zip` links\n"
+            "> 🔗 Direct <code>.mp4</code> <code>.mkv</code> <code>.zip</code> links\n"
             "> 🌐 1000+ more sites via yt-dlp\n\n"
-            "💡 _Quality selector shown for YouTube & supported sites_ 🎯"
+            "💡 <i>Quality selector shown for YouTube & supported sites</i> 🎯"
         )
     elif action == "magnet":
         await cb.message.reply(
-            "🧲✨ **MAGNET / TORRENT** ✨🧲\n"
+            "🧲✨ <b>MAGNET / TORRENT</b> ✨🧲\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-            "Paste a magnet link or upload a `.torrent` file.\n\n"
-            "> **Example:**\n"
-            "> `magnet:?xt=urn:btih:…`\n\n"
-            "📥 _Bot connects to peers, downloads and sends straight to you._"
+            "Paste a magnet link or upload a <code>.torrent</code> file.\n\n"
+            "> <b>Example:</b>\n"
+            "> <code>magnet:?xt=urn:btih:…</code>\n\n"
+            "📥 <i>Bot connects to peers, downloads and sends straight to you.</i>"
         )
     elif action == "help":
         await cb.message.reply(HELP_TEXT, reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]
         ]))
     elif action == "stats":
-        await cb.message.edit("_Fetching stats…_")
+        await cb.message.edit("<i>Fetching stats…</i>")
         await cb.message.edit(_get_stats(), reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔄 Refresh", callback_data="menu:stats"),
              InlineKeyboardButton("🏠 Main Menu", callback_data="menu:start")]

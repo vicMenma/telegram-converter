@@ -78,33 +78,33 @@ async def recv_link(client: Client, msg: Message):
     username = msg.from_user.username or msg.from_user.first_name or str(uid)
 
     if link_type == "ytdlp":
-        status = await msg.reply("🔍 _Fetching available qualities…_")
+        status = await msg.reply("🔍 <i>Fetching available qualities…</i>")
         try:
             formats, title = await get_formats(url)
             YTDLP_STATE[uid] = {"url": url, "formats": formats, "job_id": job_id}
             await status.edit(
-                f"🎬✨ **{title[:35]}** ✨🎬\n"
+                f"🎬✨ <b>{title[:35]}</b> ✨🎬\n"
                 f"▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-                f"_Choose download quality:_",
+                f"<i>Choose download quality:</i>",
                 reply_markup=format_keyboard(formats, job_id),
             )
         except Exception as e:
             logger.error(f"get_formats failed: {e}", exc_info=True)
             await status.edit(
-                f"❌ **Could not fetch video info**\n\n"
-                f"`{str(e)[:200]}`\n\n"
-                f"> _Try sending the direct video URL instead_"
+                f"❌ <b>Could not fetch video info</b>\n\n"
+                f"<code>{str(e)[:200]}</code>\n\n"
+                f"> <i>Try sending the direct video URL instead</i>"
             )
 
     elif link_type == "direct":
-        status = await msg.reply("📥 _Starting download…_")
+        status = await msg.reply("📥 <i>Starting download…</i>")
         register(job_id, uid, username, "direct", url[:60])
         update_status(job_id, "🌐 Downloading…")
         await _run_direct(client, msg, status, url, job_id)
 
     elif link_type == "magnet":
         status = await msg.reply(
-            "🧲 _Connecting to peers…_"
+            "🧲 <i>Connecting to peers…</i>"
         )
         register(job_id, uid, username, "magnet", url[:60])
         update_status(job_id, "🧲 Connecting to peers…")
@@ -119,7 +119,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
     if parts[1] == "cancel":
         uid = cb.from_user.id
         YTDLP_STATE.pop(uid, None)
-        await cb.message.edit("✕ _Cancelled._")
+        await cb.message.edit("✕ <i>Cancelled.</i>")
         await cb.answer()
         return
 
@@ -139,7 +139,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
     label     = fmt["label"]
 
     progress_msg = await cb.message.edit(
-        f"📥 **Downloading** `{label}`\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`░░░░░░░░░░░░░░░░░░░░` 0%"
+        f"📥 <b>Downloading</b> <code>{label}</code>\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n<code>░░░░░░░░░░░░░░░░░░░░</code> 0%"
     )
 
     username = cb.from_user.username or cb.from_user.first_name or str(uid)
@@ -153,7 +153,7 @@ async def leech_callback(client: Client, cb: CallbackQuery):
         await _upload_file(client, cb.message, progress_msg, path)
     except Exception as e:
         logger.error(f"yt-dlp download failed: {e}", exc_info=True)
-        await progress_msg.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
+        await progress_msg.edit(f"❌ <b>Download failed</b>\n\n<code>{str(e)[:200]}</code>")
     finally:
         finish(job_id)
         cleanup(path)
@@ -167,7 +167,7 @@ async def _run_direct(client, msg, status, url, job_id):
         await _upload_file(client, msg, status, path)
     except Exception as e:
         logger.error(f"Direct download failed: {e}", exc_info=True)
-        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
+        await status.edit(f"❌ <b>Download failed</b>\n\n<code>{str(e)[:200]}</code>")
     finally:
         finish(job_id)
         cleanup(path)
@@ -181,7 +181,7 @@ async def _run_magnet(client, msg, status, magnet, job_id):
         await _upload_file(client, msg, status, path)
     except Exception as e:
         logger.error(f"Magnet download failed: {e}", exc_info=True)
-        await status.edit(f"❌ **Download failed**\n\n`{str(e)[:200]}`")
+        await status.edit(f"❌ <b>Download failed</b>\n\n<code>{str(e)[:200]}</code>")
     finally:
         finish(job_id)
         cleanup(path)
@@ -204,7 +204,7 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
     VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v", ".ts", ".3gp"}
 
     await progress_msg.edit(
-        f"📤 _Uploading…_ `0%`\n`░░░░░░░░░░░░░░░░░░░░`\n📦 {format_size(size)}"
+        f"📤 <i>Uploading…</i> <code>0%</code>\n<code>░░░░░░░░░░░░░░░░░░░░</code>\n📦 {format_size(size)}"
     )
 
     import time as _time
@@ -228,13 +228,13 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
             eta     = int(remain / speed) if speed > 0 else 0
             eta_str = f"{eta // 60}m {eta % 60}s" if eta > 60 else f"{eta}s"
             text    = (
-                f"📤 _Uploading…_ **{pct}%**\n"
-                f"`{bar}`\n"
+                f"📤 <i>Uploading…</i> <b>{pct}%</b>\n"
+                f"<code>{bar}</code>\n"
                 f"📦 {format_size(current)} / {format_size(real_total)}\n"
                 f"🚀 {speed_str}  ·  ⏱ {eta_str}"
             )
         else:
-            text = f"📤 _Uploading…_\n📦 {format_size(current)}  ·  🚀 {speed_str}"
+            text = f"📤 <i>Uploading…</i>\n📦 {format_size(current)}  ·  🚀 {speed_str}"
         try:
             await progress_msg.edit(text)
         except Exception:
@@ -296,9 +296,9 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
             await client.send_message(
                 chat_id=msg.chat.id,
                 text=(
-                    "📢✨ **FORWARD TO CHANNEL?** ✨📢\n"
+                    "📢✨ <b>FORWARD TO CHANNEL?</b> ✨📢\n"
                     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-                    "_Would you like to send this file to your channel?_"
+                    "<i>Would you like to send this file to your channel?</i>"
                 ),
                 reply_markup=_forward_keyboard(sent.id),
             )
