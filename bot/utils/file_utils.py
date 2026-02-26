@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 
 # ── Size formatting ────────────────────────────────────────────────
 
-def format_size(num_bytes: int) -> str:
+def format_size(num_bytes: int, suffix: str = "") -> str:
     """Return a human-readable file size string."""
     if num_bytes < 1024:
-        return f"{num_bytes} B"
+        return f"{num_bytes} B{suffix}"
     if num_bytes < 1024 ** 2:
-        return f"{num_bytes / 1024:.1f} KB"
+        return f"{num_bytes / 1024:.1f} KB{suffix}"
     if num_bytes < 1024 ** 3:
-        return f"{num_bytes / 1024 ** 2:.1f} MB"
-    return f"{num_bytes / 1024 ** 3:.1f} GB"
+        return f"{num_bytes / 1024 ** 2:.1f} MB{suffix}"
+    return f"{num_bytes / 1024 ** 3:.1f} GB{suffix}"
 
 
 # ── Icon lookup ────────────────────────────────────────────────────

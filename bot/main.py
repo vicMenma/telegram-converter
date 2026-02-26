@@ -16,6 +16,7 @@ import handlers.start
 import handlers.workflow
 import handlers.leech
 import handlers.settings
+import handlers.features
 
 
 async def main():

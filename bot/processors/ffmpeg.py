@@ -546,3 +546,282 @@ def _ext_from_content_type(content_type: str) -> str:
         "video/x-matroska": ".mkv", "video/x-flv": ".flv",
     }
     return ct_map.get(content_type.split(";")[0].strip(), "")
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ── MediaInfo ──────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+
+async def get_media_info(video_path: str) -> dict:
+    """Full media info via ffprobe — all streams."""
+    proc = await asyncio.create_subprocess_exec(
+        _ffprobe(), "-v", "error",
+        "-show_entries",
+        "format=filename,size,duration,bit_rate,format_name"
+        ":stream=index,codec_type,codec_name,profile,width,height,"
+        "r_frame_rate,bit_rate,channels,sample_rate,tags",
+        "-of", "json",
+        video_path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, _ = await proc.communicate()
+    import json
+    try:
+        return json.loads(out.decode())
+    except Exception:
+        return {}
+
+
+def format_media_info(info: dict, filename: str = "") -> str:
+    """Format ffprobe output into a clean readable message."""
+    from utils.file_utils import format_size
+
+    fmt      = info.get("format", {})
+    streams  = info.get("streams", [])
+
+    size     = int(fmt.get("size", 0))
+    duration = float(fmt.get("duration", 0))
+    bitrate  = int(fmt.get("bit_rate", 0))
+    fmt_name = fmt.get("format_name", "").split(",")[0].upper()
+
+    mins, secs = divmod(int(duration), 60)
+    hrs,  mins = divmod(mins, 60)
+    dur_str = f"{hrs:02d}:{mins:02d}:{secs:02d}" if hrs else f"{mins:02d}:{secs:02d}"
+
+    lines = [
+        "📊 <b>MEDIA INFO</b>",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        f"📄 <code>{filename or fmt.get('filename', 'unknown')}</code>",
+        f"📦 <b>{format_size(size)}</b>  ·  🎞 <b>{fmt_name}</b>",
+        f"⏱ <b>{dur_str}</b>  ·  📡 <b>{format_size(bitrate, suffix='/s')}</b>",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ]
+
+    vid_idx = 0
+    aud_idx = 0
+    sub_idx = 0
+
+    for s in streams:
+        ctype = s.get("codec_type", "")
+        codec = s.get("codec_name", "?").upper()
+        tags  = s.get("tags", {})
+        lang  = tags.get("language", "")
+        title = tags.get("title", "")
+        label = f" [{lang}]" if lang else ""
+        label += f" {title}" if title else ""
+
+        if ctype == "video":
+            vid_idx += 1
+            w   = s.get("width", 0)
+            h   = s.get("height", 0)
+            fps_raw = s.get("r_frame_rate", "0/1")
+            try:
+                num, den = fps_raw.split("/")
+                fps = f"{int(num)//int(den)}fps" if int(den) else "?fps"
+            except Exception:
+                fps = "?fps"
+            br  = int(s.get("bit_rate", 0))
+            br_str = f"  ·  {format_size(br, suffix='/s')}" if br else ""
+            profile = s.get("profile", "")
+            profile_str = f" {profile}" if profile else ""
+            lines.append(
+                f"🎬 <b>Video #{vid_idx}</b>{label}\n"
+                f"  <code>{codec}{profile_str}</code>  ·  "
+                f"<code>{w}×{h}</code>  ·  <code>{fps}</code>{br_str}"
+            )
+
+        elif ctype == "audio":
+            aud_idx += 1
+            ch  = s.get("channels", 0)
+            sr  = s.get("sample_rate", "?")
+            br  = int(s.get("bit_rate", 0))
+            br_str = f"  ·  {format_size(br, suffix='/s')}" if br else ""
+            ch_str = {1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1"}.get(ch, f"{ch}ch")
+            lines.append(
+                f"🔊 <b>Audio #{aud_idx}</b>{label}\n"
+                f"  <code>{codec}</code>  ·  "
+                f"<code>{ch_str}</code>  ·  <code>{sr} Hz</code>{br_str}"
+            )
+
+        elif ctype == "subtitle":
+            sub_idx += 1
+            lines.append(
+                f"💬 <b>Subtitle #{sub_idx}</b>{label}\n"
+                f"  <code>{codec}</code>"
+            )
+
+    lines.append("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
+    return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ── Compress to target size ────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+
+async def compress_to_size(
+    video_path: str,
+    target_mb: float,
+    progress_cb=None,
+    uid: int = 0,
+) -> str:
+    """
+    Two-pass compress to target file size in MB.
+    Uses 2-pass encoding for accurate bitrate targeting.
+    """
+    ffmpeg = _ffmpeg()
+    stem   = Path(video_path).stem
+    output = os.path.join(TEMP_DIR, f"{stem}_compressed.mp4")
+
+    duration = await _get_duration(video_path)
+    if duration <= 0:
+        raise RuntimeError("Could not determine video duration.")
+
+    # Target bitrate in bits/s (reserve 10% for container overhead + audio)
+    target_bits   = target_mb * 1024 * 1024 * 8
+    audio_bitrate = 128_000   # 128 kbps audio
+    video_bitrate = int((target_bits / duration) - audio_bitrate)
+
+    if video_bitrate < 50_000:
+        raise RuntimeError(
+            f"Target size too small for {duration:.0f}s video. "
+            f"Minimum ~{int(duration * (50_000 + audio_bitrate) / 8 / 1024 / 1024) + 1} MB."
+        )
+
+    passlog = os.path.join(TEMP_DIR, f"{stem}_passlog")
+
+    # ── Pass 1 ────────────────────────────────────────────────────
+    if progress_cb:
+        await progress_cb(0, "pass 1/2", "?")
+
+    pass1 = [
+        ffmpeg, "-y",
+        "-i", video_path,
+        "-c:v", "libx264",
+        "-b:v", str(video_bitrate),
+        "-pass", "1",
+        "-passlogfile", passlog,
+        "-an",
+        "-f", "null", os.devnull,
+    ]
+    proc1 = await asyncio.create_subprocess_exec(
+        *pass1,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc1.wait()
+
+    # ── Pass 2 ────────────────────────────────────────────────────
+    if progress_cb:
+        await progress_cb(50, "pass 2/2", "?")
+
+    pass2_cmd = [
+        ffmpeg, "-y",
+        "-progress", "pipe:1", "-nostats",
+        "-i", video_path,
+        "-c:v", "libx264",
+        "-b:v", str(video_bitrate),
+        "-pass", "2",
+        "-passlogfile", passlog,
+        "-c:a", "aac",
+        "-b:a", "128k",
+        output,
+    ]
+
+    await _run_with_progress(pass2_cmd, duration, progress_cb)
+
+    # Cleanup passlog files
+    for f in [f"{passlog}-0.log", f"{passlog}-0.log.mbtree"]:
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+
+    return output
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ── Stream extractor ───────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+
+async def list_streams(video_path: str) -> list[dict]:
+    """Return all extractable streams with index, type, codec, language."""
+    info = await get_media_info(video_path)
+    result = []
+    for s in info.get("streams", []):
+        ctype = s.get("codec_type", "")
+        if ctype not in ("audio", "subtitle"):
+            continue
+        tags  = s.get("tags", {})
+        lang  = tags.get("language", "")
+        title = tags.get("title", "")
+        codec = s.get("codec_name", "?")
+        ch    = s.get("channels", 0)
+        result.append({
+            "index": s.get("index", 0),
+            "type":  ctype,
+            "codec": codec,
+            "lang":  lang,
+            "title": title,
+            "channels": ch,
+        })
+    return result
+
+
+async def extract_audio(
+    video_path: str,
+    stream_index: int,
+    fmt: str = "mp3",
+    progress_cb=None,
+) -> str:
+    """Extract an audio stream to mp3/aac/flac/opus."""
+    ffmpeg   = _ffmpeg()
+    stem     = Path(video_path).stem
+    output   = os.path.join(TEMP_DIR, f"{stem}_audio_{stream_index}.{fmt}")
+    duration = await _get_duration(video_path)
+
+    codec_map = {
+        "mp3":  ["-c:a", "libmp3lame", "-q:a", "2"],
+        "aac":  ["-c:a", "aac", "-b:a", "192k"],
+        "flac": ["-c:a", "flac"],
+        "opus": ["-c:a", "libopus", "-b:a", "128k"],
+    }
+    enc = codec_map.get(fmt, codec_map["mp3"])
+
+    cmd = [
+        ffmpeg, "-y",
+        "-progress", "pipe:1", "-nostats",
+        "-i", video_path,
+        "-map", f"0:{stream_index}",
+        *enc,
+        output,
+    ]
+    await _run_with_progress(cmd, duration, progress_cb)
+    return output
+
+
+async def extract_subtitle(
+    video_path: str,
+    stream_index: int,
+    fmt: str = "srt",
+) -> str:
+    """Extract a subtitle stream to srt/ass/vtt."""
+    ffmpeg = _ffmpeg()
+    stem   = Path(video_path).stem
+    output = os.path.join(TEMP_DIR, f"{stem}_sub_{stream_index}.{fmt}")
+
+    cmd = [
+        ffmpeg, "-y",
+        "-i", video_path,
+        "-map", f"0:{stream_index}",
+        output,
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, err = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(err.decode(errors="replace")[-500:])
+    return output

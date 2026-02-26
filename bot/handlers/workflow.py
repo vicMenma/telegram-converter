@@ -49,37 +49,45 @@ URL_RE = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 # ── Keyboards ─────────────────────────────────────────────────────
 def operation_keyboard(mode: str = "upload"):
     """
-    mode="upload"  → Burn Subtitles + Change Resolution
-    mode="direct"  → Leech + Burn Subtitles + Change Resolution
-    mode="m3u8"    → Leech (res picker) + Burn Subtitles
-    mode="magnet"  → Leech (download only) + Burn Subtitles
+    mode="upload"  → full options
+    mode="direct"  → Leech + full options
+    mode="m3u8"    → Leech + Burn + extras
+    mode="magnet"  → Leech + Burn + extras
     """
+    EXTRAS = [
+        InlineKeyboardButton("🗜️ Compress",  callback_data="op:compress"),
+        InlineKeyboardButton("📊 MediaInfo", callback_data="op:mediainfo"),
+        InlineKeyboardButton("🎵 Streams",   callback_data="op:streams"),
+    ]
+    CANCEL = [InlineKeyboardButton("✕ Cancel", callback_data="op:cancel")]
+
     if mode == "upload":
         return InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🔤 Burn Subtitles",    callback_data="op:subtitles"),
                 InlineKeyboardButton("📐 Change Resolution", callback_data="op:resolution"),
             ],
-            [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
+            EXTRAS,
+            CANCEL,
         ])
     elif mode == "direct":
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("📥 Leech (download only)", callback_data="op:leech")],
+            [InlineKeyboardButton("⬇︎ Download Only", callback_data="op:leech")],
             [
                 InlineKeyboardButton("🔤 Burn Subtitles",    callback_data="op:subtitles"),
                 InlineKeyboardButton("📐 Change Resolution", callback_data="op:resolution"),
             ],
-            [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
+            EXTRAS,
+            CANCEL,
         ])
     elif mode in ("m3u8", "magnet"):
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("📥 Leech (download only)", callback_data="op:leech")],
-            [InlineKeyboardButton("🔤 Burn Subtitles",        callback_data="op:subtitles")],
-            [InlineKeyboardButton("❌ Cancel",                callback_data="op:cancel")],
+            [InlineKeyboardButton("⬇︎ Download Only", callback_data="op:leech")],
+            [InlineKeyboardButton("🔤 Burn Subtitles", callback_data="op:subtitles")],
+            EXTRAS,
+            CANCEL,
         ])
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data="op:cancel")],
-    ])
+    return InlineKeyboardMarkup([CANCEL])
 
 
 def resolution_keyboard():
@@ -263,10 +271,16 @@ async def recv_file(client: Client, msg: Message):
 async def recv_text(client: Client, msg: Message):
     uid  = msg.from_user.id
 
-    # Let settings channel input handler take priority
+    # Let settings and features handlers take priority
     try:
         from handlers.settings import _WAITING_CHANNEL
         if uid in _WAITING_CHANNEL:
+            return
+    except ImportError:
+        pass
+    try:
+        from handlers.features import WAITING_COMPRESS
+        if uid in WAITING_COMPRESS:
             return
     except ImportError:
         pass
@@ -366,6 +380,21 @@ async def operation_chosen(client: Client, cb: CallbackQuery):
         STATE.pop(uid, None)
         await cb.message.edit("✕ <i>Cancelled.</i>")
         await cb.answer()
+        return
+
+    if op == "back":
+        await cb.answer()
+        data = STATE.get(uid, {})
+        if data:
+            mode = data.get("mode", "upload")
+            await cb.message.edit(
+                "🎬✨ <b>VIDEO READY</b> ✨🎬\n"
+                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
+                "<i>What would you like to do with it?</i>",
+                reply_markup=operation_keyboard(mode=mode)
+            )
+        else:
+            await cb.message.edit("✕ <i>Session expired.</i>")
         return
 
     if not data.get("source"):
