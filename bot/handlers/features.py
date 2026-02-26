@@ -18,7 +18,7 @@ from client import app
 from config import TEMP_DIR
 from utils.file_utils import format_size, cleanup, output_filename
 from utils.queue import register, finish, update_status
-from handlers.workflow import STATE, _send_output, make_progress
+# workflow imports done lazily inside functions to avoid circular imports
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ def extra_keyboard() -> InlineKeyboardMarkup:
 
 @app.on_callback_query(filters.regex(r"^op:mediainfo$"))
 async def cb_mediainfo(client: Client, cb: CallbackQuery):
+    from handlers.workflow import STATE
     uid  = cb.from_user.id
     data = STATE.get(uid, {})
     if not data.get("source"):
@@ -93,6 +94,7 @@ async def cb_mediainfo(client: Client, cb: CallbackQuery):
 
 @app.on_callback_query(filters.regex(r"^op:compress$"))
 async def cb_compress(client: Client, cb: CallbackQuery):
+    from handlers.workflow import STATE
     uid  = cb.from_user.id
     data = STATE.get(uid, {})
     if not data.get("source"):
@@ -127,12 +129,14 @@ async def cb_cancel_compress(client: Client, cb: CallbackQuery):
     # Restore operation keyboard
     data = STATE.get(uid, {})
     if data:
-        from handlers.workflow import operation_keyboard
+        from handlers.workflow import STATE as _STATE, operation_keyboard
+        data2 = _STATE.get(uid, {})
+        mode  = data2.get("mode", "upload") if data2 else "upload"
         await cb.message.edit(
             "🎬✨ <b>VIDEO READY</b> ✨🎬\n"
             "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
             "<i>What would you like to do with it?</i>",
-            reply_markup=operation_keyboard()
+            reply_markup=operation_keyboard(mode=mode)
         )
     else:
         await cb.message.edit("<i>Cancelled.</i>")
@@ -172,6 +176,7 @@ async def _run_compress(client: Client, msg: Message, status, uid: int, target_m
 
         update_status(job_id, "📤 Uploading…")
         out_name = output_filename(data.get("file_name") or "video.mp4", f"compressed_{target_mb:.0f}MB")
+        from handlers.workflow import _send_output
         await _send_output(client, msg, status, output_path, out_name, elapsed)
 
     except Exception as e:
@@ -188,6 +193,7 @@ async def _run_compress(client: Client, msg: Message, status, uid: int, target_m
 
 @app.on_callback_query(filters.regex(r"^op:streams$"))
 async def cb_streams(client: Client, cb: CallbackQuery):
+    from handlers.workflow import STATE
     uid  = cb.from_user.id
     data = STATE.get(uid, {})
     if not data.get("source"):

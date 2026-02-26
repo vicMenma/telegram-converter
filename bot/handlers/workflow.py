@@ -163,6 +163,7 @@ async def _video_accepted(msg: Message, source: str, file_id: str = "",
         "file_name": file_name,
         "file_size": file_size,
         "url":       url,
+        "mode":      "",   # filled below
     }
 
     if source == "upload":
@@ -181,6 +182,7 @@ async def _video_accepted(msg: Message, source: str, file_id: str = "",
         desc  = f"🔗 <code>{short}</code>"
         mode  = "direct"
 
+    STATE[uid]["mode"] = mode
     await msg.reply(
         f"🎬 <b>Video ready</b>\n\n{desc}\n\nWhat do you want to do?",
         reply_markup=operation_keyboard(mode=mode),
@@ -370,7 +372,7 @@ async def recv_text(client: Client, msg: Message):
 
 
 # ── Callback: Operation chosen ────────────────────────────────────
-@app.on_callback_query(filters.regex(r"^op:"))
+@app.on_callback_query(filters.regex(r"^op:(?!compress|mediainfo|streams|cancel_compress)"))
 async def operation_chosen(client: Client, cb: CallbackQuery):
     uid  = cb.from_user.id
     op   = cb.data.split(":")[1]
