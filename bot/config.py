@@ -48,7 +48,7 @@ RESOLUTIONS: dict[str, tuple[str, str]] = {
 # ── FFmpeg quality ────────────────────────────────────────────────
 FFMPEG_VIDEO_CODEC = "libx264"
 FFMPEG_AUDIO_CODEC = "aac"
-FFMPEG_PRESET      = "ultrafast"  # fastest encoding — good enough for subtitle burn
+FFMPEG_PRESET      = "fast"  # good balance of speed and compression
 FFMPEG_CRF         = "23"
 
 # Use all available CPU cores for encoding

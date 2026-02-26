@@ -8,7 +8,7 @@ from typing import Any
 # Defaults for every setting
 DEFAULTS: dict[str, Any] = {
     "upload_type":   "video",       # "video" | "document"
-    "preset":        "ultrafast",   # ffmpeg preset
+    "preset":        "fast",      # ffmpeg preset
     "crf":           23,            # ffmpeg CRF quality (0-51, lower = better)
     "default_res":   "source",      # default resolution: "source" | "360" | "480" | "720" | "1080"
     "notify_done":   True,          # ping user when done
