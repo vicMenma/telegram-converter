@@ -288,17 +288,41 @@ async def direct_download(url: str, job_id: str, progress_msg=None) -> str:
 
     async def _single(session):
         nonlocal downloaded
-        async with session.get(
-            url, headers=_BROWSER_HEADERS, allow_redirects=True,
-            timeout=aiohttp.ClientTimeout(total=3600, connect=30),
-        ) as resp:
-            if resp.status not in (200, 206):
-                raise RuntimeError(f"Server returned HTTP {resp.status}")
-            async with aiofiles.open(dest, "wb") as fh:
-                async for chunk in resp.content.iter_chunked(2 * 1024 * 1024):
-                    await fh.write(chunk)
-                    downloaded += len(chunk)
-                    await _progress()
+        from urllib.parse import urlparse
+        parsed  = urlparse(url)
+        referer = f"{parsed.scheme}://{parsed.netloc}/"
+        headers = {**_BROWSER_HEADERS, "Referer": referer}
+
+        for attempt in range(3):
+            downloaded = 0
+            if os.path.exists(dest):
+                os.remove(dest)
+            try:
+                async with session.get(
+                    url, headers=headers, allow_redirects=True,
+                    timeout=aiohttp.ClientTimeout(total=3600, connect=30),
+                ) as resp:
+                    if resp.status == 503:
+                        wait = 3 * (attempt + 1)
+                        logger.warning(f"503 on attempt {attempt+1}, retrying in {wait}s…")
+                        await asyncio.sleep(wait)
+                        continue
+                    if resp.status not in (200, 206):
+                        raise RuntimeError(f"Server returned HTTP {resp.status}")
+                    async with aiofiles.open(dest, "wb") as fh:
+                        async for chunk in resp.content.iter_chunked(2 * 1024 * 1024):
+                            await fh.write(chunk)
+                            downloaded += len(chunk)
+                            await _progress()
+                    return  # success
+            except RuntimeError:
+                raise
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                logger.warning(f"Download attempt {attempt+1} failed: {e}, retrying…")
+                await asyncio.sleep(3)
+        raise RuntimeError("Server returned HTTP 503 after 3 attempts")
 
     async def _parallel(session, n: int = 8):
         nonlocal downloaded
