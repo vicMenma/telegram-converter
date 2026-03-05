@@ -5,22 +5,25 @@ Falls back to defaults if not set.
 
 from typing import Any
 
-# Defaults for every setting
 DEFAULTS: dict[str, Any] = {
-    "upload_type":   "video",       # "video" | "document"
-    "preset":        "fast",      # ffmpeg preset
-    "crf":           23,            # ffmpeg CRF quality (0-51, lower = better)
-    "default_res":   "source",      # default resolution: "source" | "360" | "480" | "720" | "1080"
-    "notify_done":   True,          # ping user when done
-    "auto_forward":  False,         # auto-forward to channel without asking
-    "channel_id":    "",            # channel ID or @username to forward to
+    "upload_type":   "video",
+    "preset":        "fast",
+    "crf":           23,
+    "default_res":   "source",
+    "notify_done":   True,
+    "auto_forward":  False,
+    "channel_ids":   [],           # list of channel IDs/usernames
 }
 
 _STORE: dict[int, dict[str, Any]] = {}
 
 
 def get(uid: int, key: str) -> Any:
-    return _STORE.get(uid, {}).get(key, DEFAULTS[key])
+    val = _STORE.get(uid, {}).get(key, DEFAULTS[key])
+    # backward compat: old single channel_id string
+    if key == "channel_ids" and isinstance(val, str):
+        return [val] if val else []
+    return val
 
 
 def set(uid: int, key: str, value: Any) -> None:
@@ -32,6 +35,9 @@ def set(uid: int, key: str, value: Any) -> None:
 def get_all(uid: int) -> dict[str, Any]:
     base = dict(DEFAULTS)
     base.update(_STORE.get(uid, {}))
+    # backward compat
+    if isinstance(base.get("channel_ids"), str):
+        base["channel_ids"] = [base["channel_ids"]] if base["channel_ids"] else []
     return base
 
 
