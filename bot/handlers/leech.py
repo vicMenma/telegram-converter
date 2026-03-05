@@ -229,32 +229,34 @@ async def _upload_file(client: Client, msg: Message, progress_msg, file_path: st
 
     await progress_msg.delete()
 
-    # ── Ask to forward to channel ─────────────────────────────────
-    _channel = user_setting(msg.chat.id, "channel_id")
-    if _channel:
-        from handlers.workflow import FORWARD_PENDING, _forward_keyboard
-        _auto_fwd = user_setting(msg.chat.id, "auto_forward")
-        if _auto_fwd:
-            try:
-                await client.copy_message(
-                    chat_id=_channel,
-                    from_chat_id=sent.chat.id,
-                    message_id=sent.id,
-                )
-            except Exception as e:
-                logger.error(f"Auto-forward failed: {e}")
+    # ── Ask to forward to channels ────────────────────────────────
+    from handlers.workflow import FORWARD_PENDING, _forward_keyboard
+    from utils.settings import get as _get_setting
+    _channels = _get_setting(msg.chat.id, "channel_ids")
+    if _channels:
+        if user_setting(msg.chat.id, "auto_forward"):
+            for _ch in _channels:
+                try:
+                    await client.copy_message(
+                        chat_id=_ch,
+                        from_chat_id=sent.chat.id,
+                        message_id=sent.id,
+                    )
+                except Exception as e:
+                    logger.error(f"Auto-forward to {_ch} failed: {e}")
         else:
             FORWARD_PENDING[sent.id] = {
                 "chat_id":    sent.chat.id,
                 "message_id": sent.id,
-                "channel_id": _channel,
+                "channel_ids": _channels,
             }
+            ch_list = "\n".join(f"  • <code>{c}</code>" for c in _channels)
             await client.send_message(
                 chat_id=msg.chat.id,
                 text=(
-                    "📢✨ <b>FORWARD TO CHANNEL?</b> ✨📢\n"
-                    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n"
-                    "<i>Would you like to send this file to your channel?</i>"
+                    "📢 <b>Forward to channels?</b>\n\n"
+                    f"{ch_list}\n\n"
+                    "<i>Would you like to forward this file?</i>"
                 ),
                 reply_markup=_forward_keyboard(sent.id),
             )

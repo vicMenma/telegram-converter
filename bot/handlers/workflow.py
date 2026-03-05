@@ -576,28 +576,32 @@ async def _send_output(client: Client, msg: Message, progress_msg,
             pass
 
     # Channel forwarding
-    _channel = user_setting(msg.chat.id, "channel_id")
-    if _channel:
+    from utils.settings import get as _get_setting
+    _channels = _get_setting(msg.chat.id, "channel_ids")
+    if _channels:
         if user_setting(msg.chat.id, "auto_forward"):
-            try:
-                await client.copy_message(
-                    chat_id=_channel,
-                    from_chat_id=sent.chat.id,
-                    message_id=sent.id,
-                )
-            except Exception as e:
-                logger.warning(f"Auto-forward failed: {e}")
+            for _ch in _channels:
+                try:
+                    await client.copy_message(
+                        chat_id=_ch,
+                        from_chat_id=sent.chat.id,
+                        message_id=sent.id,
+                    )
+                except Exception as e:
+                    logger.warning(f"Auto-forward to {_ch} failed: {e}")
         else:
             FORWARD_PENDING[sent.id] = {
                 "chat_id":    sent.chat.id,
                 "message_id": sent.id,
-                "channel_id": _channel,
+                "channel_ids": _channels,
             }
+            ch_list = "\n".join(f"  • <code>{c}</code>" for c in _channels)
             await client.send_message(
                 chat_id=msg.chat.id,
                 text=(
-                    "📢 <b>Forward to channel?</b>\n\n"
-                    "<i>Would you like to send this file to your channel?</i>"
+                    "📢 <b>Forward to channels?</b>\n\n"
+                    f"{ch_list}\n\n"
+                    "<i>Would you like to forward this file?</i>"
                 ),
                 reply_markup=_forward_keyboard(sent.id),
             )
@@ -630,20 +634,30 @@ async def forward_callback(client: Client, cb: CallbackQuery):
         await cb.answer()
         return
 
-    channel_id = pending.get("channel_id") or user_setting(cb.from_user.id, "channel_id")
-    if not channel_id:
-        await cb.answer("⚠️ No channel configured.", show_alert=True)
+    from utils.settings import get as _get_ch
+    channel_ids = pending.get("channel_ids") or _get_ch(cb.from_user.id, "channel_ids")
+    if not channel_ids:
+        await cb.answer("⚠️ No channels configured.", show_alert=True)
         await cb.message.delete()
         return
 
-    try:
-        await client.copy_message(
-            chat_id=channel_id,
-            from_chat_id=pending["chat_id"],
-            message_id=pending["message_id"],
+    errors = []
+    for ch in channel_ids:
+        try:
+            await client.copy_message(
+                chat_id=ch,
+                from_chat_id=pending["chat_id"],
+                message_id=pending["message_id"],
+            )
+        except Exception as e:
+            errors.append(f"{ch}: {str(e)[:60]}")
+
+    if errors:
+        await cb.message.edit(
+            f"⚠️ <i>Forwarded with errors:</i>\n\n" +
+            "\n".join(f"<code>{e}</code>" for e in errors)
         )
-        await cb.message.edit("📢 ✅ <i>Forwarded to channel.</i>")
+        await cb.answer("⚠️ Some forwards failed", show_alert=True)
+    else:
+        await cb.message.edit(f"📢 ✅ <i>Forwarded to {len(channel_ids)} channel(s).</i>")
         await cb.answer("✅ Forwarded!")
-    except Exception as e:
-        await cb.message.edit(f"❌ <i>Forward failed</i>\n\n<code>{str(e)[:200]}</code>")
-        await cb.answer("❌ Failed", show_alert=True)
