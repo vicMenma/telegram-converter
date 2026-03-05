@@ -119,19 +119,52 @@ async def cb_streams(client: Client, cb: CallbackQuery):
         finish(job_id)
 
 
+# ISO 639-2/1 language code → display name + flag
+_LANG_MAP = {
+    "fre": ("French", "🇫🇷"), "fra": ("French", "🇫🇷"), "fr": ("French", "🇫🇷"),
+    "eng": ("English", "🇬🇧"), "en": ("English", "🇬🇧"),
+    "jpn": ("Japanese", "🇯🇵"), "ja": ("Japanese", "🇯🇵"),
+    "ger": ("German", "🇩🇪"), "deu": ("German", "🇩🇪"), "de": ("German", "🇩🇪"),
+    "spa": ("Spanish", "🇪🇸"), "esp": ("Spanish", "🇪🇸"), "es": ("Spanish", "🇪🇸"),
+    "ita": ("Italian", "🇮🇹"), "it": ("Italian", "🇮🇹"),
+    "por": ("Portuguese", "🇵🇹"), "pt": ("Portuguese", "🇵🇹"),
+    "rus": ("Russian", "🇷🇺"), "ru": ("Russian", "🇷🇺"),
+    "ara": ("Arabic", "🇸🇦"), "ar": ("Arabic", "🇸🇦"),
+    "chi": ("Chinese", "🇨🇳"), "zho": ("Chinese", "🇨🇳"), "zh": ("Chinese", "🇨🇳"),
+    "kor": ("Korean", "🇰🇷"), "ko": ("Korean", "🇰🇷"),
+    "dut": ("Dutch", "🇳🇱"), "nld": ("Dutch", "🇳🇱"), "nl": ("Dutch", "🇳🇱"),
+    "pol": ("Polish", "🇵🇱"), "pl": ("Polish", "🇵🇱"),
+    "tur": ("Turkish", "🇹🇷"), "tr": ("Turkish", "🇹🇷"),
+    "vie": ("Vietnamese", "🇻🇳"), "vi": ("Vietnamese", "🇻🇳"),
+    "tha": ("Thai", "🇹🇭"), "th": ("Thai", "🇹🇭"),
+    "ind": ("Indonesian", "🇮🇩"), "id": ("Indonesian", "🇮🇩"),
+    "und": ("Unknown", "❓"),
+}
+
+def _lang_label(lang: str, title: str) -> str:
+    """Return a readable language label like 🇫🇷 French or the title if set."""
+    if title:
+        # Use title if it has meaningful content (not just a code)
+        name, flag = _LANG_MAP.get(lang.lower(), (lang.upper() or "?", "🌐"))
+        return f"{flag} {title}"
+    if lang:
+        name, flag = _LANG_MAP.get(lang.lower(), (lang.upper(), "🌐"))
+        return f"{flag} {name}"
+    return "🌐 Unknown"
+
+
 def _streams_keyboard(streams: list[dict]) -> InlineKeyboardMarkup:
     rows = []
     for s in streams:
-        idx   = s["index"]
-        codec = s["codec"].upper()
-        lang  = f" [{s['lang']}]" if s["lang"] else ""
-        title = f" {s['title']}" if s["title"] else ""
+        idx    = s["index"]
+        codec  = s["codec"].upper()
+        lang_l = _lang_label(s["lang"], s["title"])
         if s["type"] == "audio":
             ch_str = {1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1"}.get(s["channels"], f"{s['channels']}ch")
-            label  = f"🔊 Audio{lang}{title} — {codec} {ch_str}"
+            label  = f"🔊 {lang_l} — {codec} {ch_str}"
             rows.append([InlineKeyboardButton(label, callback_data=f"stream:audio:{idx}")])
         elif s["type"] == "subtitle":
-            label = f"💬 Sub{lang}{title} — {codec}"
+            label = f"💬 {lang_l} — {codec}"
             rows.append([InlineKeyboardButton(label, callback_data=f"stream:sub:{idx}")])
     rows.append([InlineKeyboardButton("✕ Cancel", callback_data="stream:cancel")])
     return InlineKeyboardMarkup(rows)
