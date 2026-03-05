@@ -141,30 +141,44 @@ _LANG_MAP = {
     "und": ("Unknown", "❓"),
 }
 
-def _lang_label(lang: str, title: str) -> str:
-    """Return a readable language label like 🇫🇷 French or the title if set."""
-    if title:
-        # Use title if it has meaningful content (not just a code)
-        name, flag = _LANG_MAP.get(lang.lower(), (lang.upper() or "?", "🌐"))
-        return f"{flag} {title}"
-    if lang:
+def _lang_label(lang: str, title: str, idx: int) -> str:
+    """Return a readable language label. Falls back to title, then stream index."""
+    # Try lang code first
+    if lang and lang.lower() not in ("und", ""):
         name, flag = _LANG_MAP.get(lang.lower(), (lang.upper(), "🌐"))
-        return f"{flag} {name}"
-    return "🌐 Unknown"
+        label = f"{flag} {name}"
+        if title:
+            label += f" ({title})"
+        return label
+    # Use title if available and meaningful
+    if title and title.lower() not in ("und", "unknown", ""):
+        # Check if title itself is a language code
+        t = title.strip().lower()
+        if t in _LANG_MAP:
+            name, flag = _LANG_MAP[t]
+            return f"{flag} {name}"
+        return f"🌐 {title}"
+    # Last resort: stream number
+    return f"🌐 Track {idx}"
 
 
 def _streams_keyboard(streams: list[dict]) -> InlineKeyboardMarkup:
     rows = []
+    # Count types to number them if multiple unknowns
+    audio_count = 0
+    sub_count   = 0
     for s in streams:
         idx    = s["index"]
         codec  = s["codec"].upper()
-        lang_l = _lang_label(s["lang"], s["title"])
+        lang_l = _lang_label(s["lang"], s["title"], idx)
         if s["type"] == "audio":
+            audio_count += 1
             ch_str = {1: "Mono", 2: "Stereo", 6: "5.1", 8: "7.1"}.get(s["channels"], f"{s['channels']}ch")
-            label  = f"🔊 {lang_l} — {codec} {ch_str}"
+            label  = f"🔊 Audio {audio_count} · {lang_l} — {codec} {ch_str}"
             rows.append([InlineKeyboardButton(label, callback_data=f"stream:audio:{idx}")])
         elif s["type"] == "subtitle":
-            label = f"💬 {lang_l} — {codec}"
+            sub_count += 1
+            label = f"💬 Sub {sub_count} · {lang_l} — {codec}"
             rows.append([InlineKeyboardButton(label, callback_data=f"stream:sub:{idx}")])
     rows.append([InlineKeyboardButton("✕ Cancel", callback_data="stream:cancel")])
     return InlineKeyboardMarkup(rows)
