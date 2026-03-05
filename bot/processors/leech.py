@@ -48,9 +48,9 @@ YTDLP_DOMAINS = {
 
 # Services that require login — can't be downloaded directly
 _BLOCKED_DOMAINS = {
-    "seedr.cc", "alldebrid.com", "real-debrid.com",
+    "alldebrid.com", "real-debrid.com",
     "debrid-link.fr", "premiumize.me", "1fichier.com",
-    "mega.nz", "mediafire.com", "rapidgator.net",
+    "mega.nz", "rapidgator.net",
 }
 
 
