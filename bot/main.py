@@ -19,6 +19,29 @@ import handlers.settings
 import handlers.features
 
 
+async def _start_webhook_server():
+    """Start FastAPI webhook server on port 8080."""
+    try:
+        import uvicorn
+        from config import ADMIN_ID, CLOUDCONVERT_WEBHOOK_SECRET
+        import webhook_server
+        webhook_server.init(app, ADMIN_ID, CLOUDCONVERT_WEBHOOK_SECRET)
+
+        config = uvicorn.Config(
+            webhook_server.app,
+            host="0.0.0.0",
+            port=8080,
+            log_level="warning",
+        )
+        server = uvicorn.Server(config)
+        asyncio.create_task(server.serve())
+        logging.info("✅ Webhook server started on port 8080")
+    except ImportError:
+        logging.warning("⚠️ uvicorn not installed — webhook server disabled. Run: pip install uvicorn fastapi")
+    except Exception as e:
+        logging.warning(f"⚠️ Webhook server failed to start: {e}")
+
+
 async def main():
     # Start user client if session string is configured
     user = get_user_client()
@@ -32,6 +55,9 @@ async def main():
     # Start bot
     await app.start()
     logging.info("✅ Bot started")
+
+    # Start webhook server
+    await _start_webhook_server()
 
     await asyncio.get_event_loop().create_future()  # run forever
 

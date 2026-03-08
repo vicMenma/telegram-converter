@@ -13,6 +13,10 @@ API_ID       = int(os.getenv("API_ID", "0"))
 API_HASH     = os.getenv("API_HASH", "")
 MINI_APP_URL = os.getenv("MINI_APP_URL", "https://your-mini-app.vercel.app")
 
+# ── CloudConvert ─────────────────────────────────────────────────
+CLOUDCONVERT_API_KEY      = os.getenv("CLOUDCONVERT_API_KEY", "")
+CLOUDCONVERT_WEBHOOK_SECRET = os.getenv("CLOUDCONVERT_WEBHOOK_SECRET", "")
+
 # ── Admin ─────────────────────────────────────────────────────────
 # Your Telegram user ID — only this user can use /queue
 # Find your ID by messaging @userinfobot on Telegram
